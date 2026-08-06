@@ -1,81 +1,108 @@
 # Lab Equipment Borrowing System
 
-เว็บแอปสำหรับจัดการการยืม–คืนอุปกรณ์ภายในห้องปฏิบัติการ พัฒนาด้วย
-[Flet](https://flet.dev/) และ SQLite โดยเวอร์ชันแรกออกแบบให้เจ้าหน้าที่เป็นผู้ใช้งานหลัก
-และยังไม่มีระบบเข้าสู่ระบบหลายระดับ
+Flet Web foundation สำหรับระบบยืม–คืนอุปกรณ์ห้องปฏิบัติการ
 
-## ขอบเขต MVP
+## เครื่องมือที่ต้องมี
 
-- จัดการข้อมูลอุปกรณ์และผู้ยืม
-- บันทึกการยืมอุปกรณ์โดยตรวจสอบจำนวนพร้อมใช้
-- บันทึกการคืนทั้งหมดหรือคืนบางส่วนได้หลายครั้ง
-- แยกอุปกรณ์ที่คืนในสภาพชำรุดออกจากจำนวนพร้อมใช้
-- ค้นหารายการที่กำลังยืมและรายการเกินกำหนด
-- ดูประวัติการยืม–คืนย้อนหลัง
-- จัดเก็บข้อมูลภายในเครื่องด้วย SQLite
+เลือกใช้วิธีใดวิธีหนึ่ง:
 
-รายละเอียด requirement, schema, business rules, user flow, acceptance criteria และลำดับการพัฒนาอยู่ใน
-[แผนโครงการ](docs/project-plan.md)
+- รันบนเครื่อง: Python 3.11 ขึ้นไป
+- รันด้วย container: Docker Desktop หรือ Docker Engine
 
-## Tech Stack
+## วิธีรันบนเครื่อง
 
-- Python 3.11+
-- Flet Web
-- SQLite ผ่านโมดูล `sqlite3` ใน Python standard library
-- `pytest` สำหรับ automated tests
+### macOS และ Linux
 
-เลือก `sqlite3` สำหรับ MVP เพื่อลด dependency และให้ transaction boundary ชัดเจน
-หาก data model หรือ migration ซับซ้อนขึ้นจึงค่อยประเมิน ORM อีกครั้ง
-
-## โครงสร้างโปรเจกต์เป้าหมาย
-
-```text
-flet-lab-equipment-borrowing/
-├── main.py
-├── requirements.txt
-├── README.md
-├── app/
-│   ├── database.py
-│   ├── models.py
-│   ├── services/
-│   └── views/
-├── data/
-├── docs/
-│   └── project-plan.md
-└── tests/
-```
-
-โครงสร้างนี้เป็นเป้าหมายระหว่างการพัฒนา ปัจจุบันอาจยังมีไฟล์ไม่ครบตามรายการ
-
-## เริ่มต้นพัฒนา
-
-เมื่อมี `requirements.txt` และ `main.py` แล้ว ให้ติดตั้งและเปิดแอปด้วยคำสั่ง:
+สร้าง virtual environment และติดตั้ง dependencies:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-flet run --web main.py
 ```
 
-บน Windows ให้ใช้ `.venv\Scripts\activate` แทนคำสั่ง activate ด้านบน
+เปิด Flet development server:
 
-## การทดสอบ
+```bash
+flet run --web --port 8550 main.py
+```
 
-เมื่อมี test suite แล้ว ให้รันด้วย:
+เปิด [http://localhost:8550](http://localhost:8550) ในเบราว์เซอร์
+
+### Windows PowerShell
+
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+flet run --web --port 8550 main.py
+```
+
+เปิด [http://localhost:8550](http://localhost:8550) ในเบราว์เซอร์
+
+## วิธีสร้างและรันด้วย Docker
+
+### Docker Compose (แนะนำ)
+
+สร้าง image และเปิด container โดยกำหนดพอร์ต `8080` ให้อัตโนมัติ:
+
+```bash
+docker compose up --build -d
+```
+
+หลังจากรันครั้งแรก Docker Desktop จะแสดง Compose app ชื่อ
+`flet-lab-equipment-borrowing` ซึ่งสามารถกด Start/Stop ได้โดยไม่ต้องกำหนดพอร์ตใหม่
+
+เปิด [http://localhost:8080](http://localhost:8080) ในเบราว์เซอร์
+
+หยุดและนำ container ออกด้วย:
+
+```bash
+docker compose down
+```
+
+### Docker image โดยตรง
+
+สร้าง image จาก `Dockerfile`:
+
+```bash
+docker build -t lab-equipment-borrowing .
+```
+
+รัน container และเปิดพอร์ต `8080`:
+
+```bash
+docker run --rm --name lab-equipment-borrowing -p 8080:8080 lab-equipment-borrowing
+```
+
+เปิด [http://localhost:8080](http://localhost:8080) ในเบราว์เซอร์
+
+หยุด container ด้วย `Ctrl+C` หากรันอยู่หน้า terminal หรือใช้คำสั่ง:
+
+```bash
+docker stop lab-equipment-borrowing
+```
+
+## วิธีรันทดสอบ
+
+ติดตั้ง development dependencies:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+รัน test suite:
 
 ```bash
 python -m pytest
 ```
 
-หัวใจของ test suite คือการยืนยันว่า transaction การยืม–คืนไม่ทำให้จำนวนอุปกรณ์ผิดพลาด
-รวมถึงกรณียืมเกิน คืนเกิน คืนบางส่วนหลายครั้ง และเกิดข้อผิดพลาดระหว่างบันทึกข้อมูล
+## เอกสารโครงการ
 
-## สถานะโครงการ
-
-อยู่ในขั้นวางแผน ยังไม่มี implementation สำหรับใช้งานจริง ดู milestone และเงื่อนไขความสำเร็จได้ใน
+รายละเอียดขอบเขต, data model, business rules และแผนพัฒนาอยู่ใน
 [docs/project-plan.md](docs/project-plan.md)
 
-## License
+เอกสารมอบหมายงานแยกตามทีม:
 
-โครงการนี้จัดทำขึ้นเพื่อการศึกษาและสามารถนำไปปรับปรุงต่อยอดได้
+- [Frontend Scope](docs/scopes/frontend.md)
+- [Backend Scope](docs/scopes/backend.md)
