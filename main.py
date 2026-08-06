@@ -1,8 +1,9 @@
 import flet as ft
 
-from app.components.common import build_state_view
 from app.services.container import create_app_services
+from app.services.fake_services import FakeInventoryService
 from app.theme import APP_TITLE, NAVIGATION_ITEMS, NAV_WIDTH, PAGE_PADDING
+from app.views.inventory import build_inventory_view
 
 
 def get_navigation_items() -> list[dict[str, object]]:
@@ -11,72 +12,13 @@ def get_navigation_items() -> list[dict[str, object]]:
 
 def build_home(services=None) -> ft.Control:
     inventory_service = services.inventory_service if services is not None else None
-    units = inventory_service.list_units() if inventory_service is not None else []
-
-    status_summary = ft.Column(
-        controls=[
-            ft.Text("Inventory overview", size=24, weight=ft.FontWeight.BOLD),
-            ft.Text("Demo data is sourced from the frontend service container.", size=14, color=ft.Colors.GREY_700),
-        ],
-        spacing=4,
-        tight=True,
-    )
-
-    unit_cards = [
-        ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Text(unit.asset_code, weight=ft.FontWeight.BOLD),
-                    ft.Text(unit.equipment_name, size=13, color=ft.Colors.GREY_700),
-                    ft.Text(unit.status.title(), size=12, color=ft.Colors.BLUE_700),
-                    ft.Text(unit.location, size=12, color=ft.Colors.GREY_600),
-                ],
-                spacing=4,
-                tight=True,
-            ),
-            padding=12,
-            border=ft.border.Border(
-                left=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                right=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                top=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-            ),
-            border_radius=8,
-            width=220,
-        )
-        for unit in units[:4]
-    ]
+    if inventory_service is None:
+        inventory_service = FakeInventoryService()
 
     return ft.SafeArea(
         ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Icon(ft.Icons.SCIENCE_OUTLINED, size=64, color=ft.Colors.BLUE_700),
-                    ft.Text(
-                        APP_TITLE,
-                        size=32,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Text(
-                        "Flet Web foundation is running.",
-                        size=16,
-                        color=ft.Colors.GREY_700,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    status_summary,
-                    ft.Row(
-                        controls=unit_cards,
-                        wrap=True,
-                        spacing=12,
-                        run_spacing=12,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=16,
-                tight=True,
-            ),
-            alignment=ft.Alignment.CENTER,
+            content=build_inventory_view(inventory_service),
+            alignment=ft.Alignment.TOP_LEFT,
             expand=True,
             padding=24,
         ),

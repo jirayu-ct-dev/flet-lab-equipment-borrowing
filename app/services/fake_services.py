@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -49,7 +48,33 @@ class FakeInventoryService:
                 return unit
         return None
 
-    def search_units(self, status: str | None = None) -> list[InventoryUnit]:
-        if status is None:
-            return self.list_units()
-        return [unit for unit in self._units if unit.status == status]
+    def create_equipment(self, name: str, equipment_code: str, category: str) -> InventoryEquipment:
+        equipment = InventoryEquipment(
+            id=f"eq-{len(self._equipment) + 1}",
+            equipment_code=equipment_code,
+            name=name,
+            category=category,
+        )
+        self._equipment.append(equipment)
+        return equipment
+
+    def create_unit(self, *, asset_code: str, equipment_id: str, location: str, status: str = "available") -> InventoryUnit:
+        equipment_name = next((item.name for item in self._equipment if item.id == equipment_id), "Unknown")
+        unit = InventoryUnit(
+            id=f"unit-{len(self._units) + 1}",
+            asset_code=asset_code,
+            equipment_name=equipment_name,
+            status=status,
+            location=location,
+        )
+        self._units.append(unit)
+        return unit
+
+    def search_units(self, keyword: str | None = None, status: str | None = None) -> list[InventoryUnit]:
+        results = list(self._units)
+        if keyword:
+            keyword = keyword.lower()
+            results = [unit for unit in results if keyword in unit.equipment_name.lower() or keyword in unit.asset_code.lower()]
+        if status:
+            results = [unit for unit in results if unit.status == status]
+        return results
