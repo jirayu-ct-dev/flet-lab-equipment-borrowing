@@ -93,6 +93,8 @@ Frontend ร่วม review `app/models.py` หรือ `app/contracts.py` แ
 
 ## Contract usage rules
 
+This section defines how frontend views should use service contracts and avoid direct database or repository access.
+
 - View รับ services ผ่าน constructor/composition root
 - View ไม่ import repository, connection หรือ `sqlite3`
 - Domain errors ถูก map เป็นข้อความผู้ใช้ในชั้น UI
@@ -101,6 +103,8 @@ Frontend ร่วม review `app/models.py` หรือ `app/contracts.py` แ
 
 ## Test requirements
 
+This section defines the required frontend test coverage for the MVP and acceptance criteria.
+
 - unit test สำหรับ state/validation ที่สำคัญ
 - UI smoke tests สำหรับ navigation และ forms หลัก
 - manual responsive check อย่างน้อย desktop และ mobile width
@@ -108,12 +112,16 @@ Frontend ร่วม review `app/models.py` หรือ `app/contracts.py` แ
 
 ## ไม่อยู่ในขอบเขต Frontend MVP
 
+หัวข้อนี้บอกงานที่ไม่รวมอยู่ในขอบเขต Frontend MVP เพื่อให้ทีมทำเฉพาะ workflow หลักและไม่ใส่ฟีเจอร์รอง
+
 - Login/permissions UI
 - Dashboard analytics
 - QR scanner, notification, reports และ GPS
 - custom design system ขนาดใหญ่หรือ animation ที่ไม่ช่วย workflow
 
 ## Definition of Done
+
+This section defines the final completion criteria for the frontend scope.
 
 - ตรง acceptance criteria และใช้ service contract
 - ไม่มี SQL/database import ใน views

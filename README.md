@@ -25,6 +25,7 @@ python -m pip install -r requirements.txt
 
 ```bash
 flet run --web --port 8550 main.py
+
 ```
 
 เปิด [http://localhost:8550](http://localhost:8550) ในเบราว์เซอร์

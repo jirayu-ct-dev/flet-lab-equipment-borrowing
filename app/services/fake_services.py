@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date, timedelta
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,32 @@ class BorrowDraft:
     status: str = "draft"
 
 
+@dataclass(frozen=True)
+class LoanRecord:
+    id: str
+    borrower_code: str
+    staff_code: str
+    unit_ids: list[str]
+    borrow_date: str
+    due_date: str
+    purpose: str
+    returned_unit_ids: list[str] = field(default_factory=list)
+    status: str = "active"
+
+
+@dataclass(frozen=True)
+class HistoryEvent:
+    id: str
+    event_type: str
+    event_date: str
+    description: str
+    borrower_code: str = ""
+    staff_code: str = ""
+    equipment_name: str = ""
+    asset_code: str = ""
+    unit_id: str = ""
+
+
 class FakeInventoryService:
     def __init__(self) -> None:
         self._equipment = [
@@ -75,6 +102,66 @@ class FakeInventoryService:
             BorrowerRecord(id="borrower-2", borrower_code="BR-002", full_name="Mina Patel", department="Physics", email="mina@example.com", status="inactive"),
         ]
         self._borrow_drafts: list[BorrowDraft] = []
+        self._loans: list[LoanRecord] = [
+            LoanRecord(
+                id="loan-1",
+                borrower_code="BR-001",
+                staff_code="ST-001",
+                unit_ids=["unit-2"],
+                borrow_date=(date.today() - timedelta(days=3)).isoformat(),
+                due_date=(date.today() + timedelta(days=4)).isoformat(),
+                purpose="Team demo",
+                returned_unit_ids=[],
+                status="active",
+            )
+        ]
+        self._history: list[HistoryEvent] = [
+            HistoryEvent(
+                id="hist-1",
+                event_type="borrowed",
+                event_date=(date.today() - timedelta(days=3)).isoformat(),
+                description="Lin Chen ยืม Laptop AST-002",
+                borrower_code="BR-001",
+                staff_code="ST-001",
+                equipment_name="Laptop",
+                asset_code="AST-002",
+                unit_id="unit-2",
+            ),
+            HistoryEvent(
+                id="hist-2",
+                event_type="maintenance",
+                event_date=(date.today() - timedelta(days=5)).isoformat(),
+                description="Microscope AST-003 ส่งซ่อม",
+                staff_code="ST-001",
+                equipment_name="Microscope",
+                asset_code="AST-003",
+                unit_id="unit-3",
+            ),
+        ]
+
+    def list_history(
+        self,
+        *,
+        borrower_query: str | None = None,
+        equipment_query: str | None = None,
+        asset_code: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[HistoryEvent]:
+        results = list(self._history)
+        if borrower_query:
+            q = borrower_query.lower()
+            results = [e for e in results if q in e.borrower_code.lower() or q in e.description.lower()]
+        if equipment_query:
+            q = equipment_query.lower()
+            results = [e for e in results if q in e.equipment_name.lower() or q in e.description.lower()]
+        if asset_code:
+            results = [e for e in results if asset_code.lower() in e.asset_code.lower()]
+        if start_date:
+            results = [e for e in results if e.event_date >= start_date]
+        if end_date:
+            results = [e for e in results if e.event_date <= end_date]
+        return results
 
     def list_equipment(self) -> list[InventoryEquipment]:
         return list(self._equipment)
@@ -239,8 +326,76 @@ class FakeInventoryService:
                 status="active",
             )
             self._borrow_drafts[index] = confirmed
+            self._loans.append(
+                LoanRecord(
+                    id=f"loan-{len(self._loans) + 1}",
+                    borrower_code=draft.borrower_code,
+                    staff_code=draft.staff_code,
+                    unit_ids=draft.unit_ids,
+                    borrow_date=draft.borrow_date,
+                    due_date=draft.due_date,
+                    purpose=draft.purpose,
+                    returned_unit_ids=[],
+                    status="active",
+                )
+            )
             return confirmed
         return None
+
+    def list_loans(self, *, filter_type: str | None = None) -> list[LoanRecord]:
+        loans = list(self._loans)
+        if filter_type == "today":
+            today = date.today()
+            loans = [loan for loan in loans if date.fromisoformat(loan.due_date) == today]
+        elif filter_type == "soon":
+            today = date.today()
+            soon = today + timedelta(days=7)
+            loans = [loan for loan in loans if today < date.fromisoformat(loan.due_date) <= soon]
+        elif filter_type == "overdue":
+            today = date.today()
+            loans = [loan for loan in loans if date.fromisoformat(loan.due_date) < today]
+        elif filter_type == "partial":
+            loans = [loan for loan in loans if loan.status == "partial"]
+        return loans
+
+    def get_loan(self, loan_id: str) -> LoanRecord | None:
+        return next((loan for loan in self._loans if loan.id == loan_id), None)
+
+    def return_loan_units(self, loan_id: str, unit_ids: list[str], outcome: str, condition: str | None = None) -> LoanRecord | None:
+        loan = self.get_loan(loan_id)
+        if loan is None:
+            return None
+
+        if not unit_ids:
+            return None
+
+        returned = set(loan.returned_unit_ids)
+        updated_units = list(loan.returned_unit_ids)
+        for unit_id in unit_ids:
+            if unit_id not in loan.unit_ids or unit_id in returned:
+                continue
+            self.update_unit_status(unit_id, "available" if outcome == "returned" else "maintenance" if outcome == "maintenance" else "reported_lost", reason=condition)
+            updated_units.append(unit_id)
+            returned.add(unit_id)
+
+        if not updated_units:
+            return None
+
+        remaining = [unit_id for unit_id in loan.unit_ids if unit_id not in returned]
+        status = "closed" if not remaining else "partial" if len(returned) > 0 else "active"
+        updated_loan = LoanRecord(
+            id=loan.id,
+            borrower_code=loan.borrower_code,
+            staff_code=loan.staff_code,
+            unit_ids=loan.unit_ids,
+            borrow_date=loan.borrow_date,
+            due_date=loan.due_date,
+            purpose=loan.purpose,
+            returned_unit_ids=updated_units,
+            status=status,
+        )
+        self._loans = [updated_loan if item.id == loan_id else item for item in self._loans]
+        return updated_loan
 
     def get_unit_by_id(self, unit_id: str) -> InventoryUnit | None:
         for unit in self._units:

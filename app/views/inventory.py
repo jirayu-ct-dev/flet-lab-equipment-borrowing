@@ -1,126 +1,342 @@
 import flet as ft
 
-from app.components.common import build_state_view
+from app.components.common import (
+    build_card,
+    build_page_header,
+    build_state_view,
+    build_status_chip,
+)
 from app.services.fake_services import FakeInventoryService
+from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
 
 
 class InventoryView(ft.Container):
     def __init__(self, service: FakeInventoryService | None = None) -> None:
-        super().__init__(expand=True, padding=8)
+        super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
-        self.search_field = ft.TextField(label="Search by asset code or equipment", hint_text="Try 'microscope'")
+        
+        self.search_field = ft.TextField(
+            label="ค้นหาด้วยรหัสสินทรัพย์หรืออุปกรณ์",
+            hint_text="ลอง 'microscope' หรือ 'AST-001'",
+            prefix_icon=ft.Icons.SEARCH,
+            expand=True,
+        )
+        
         self.status_dropdown = ft.Dropdown(
-            label="Status",
+            label="สถานะ",
             options=[
-                ft.dropdown.Option("all", "All"),
-                ft.dropdown.Option("available", "Available"),
-                ft.dropdown.Option("borrowed", "Borrowed"),
-                ft.dropdown.Option("maintenance", "Maintenance"),
-                ft.dropdown.Option("reported_lost", "Reported lost"),
-                ft.dropdown.Option("retired", "Retired"),
+                ft.dropdown.Option("all", "ทั้งหมด"),
+                ft.dropdown.Option("available", "พร้อมใช้งาน"),
+                ft.dropdown.Option("borrowed", "ถูกยืม"),
+                ft.dropdown.Option("maintenance", "กำลังบำรุงรักษา"),
+                ft.dropdown.Option("reported_lost", "แจ้งหาย"),
+                ft.dropdown.Option("retired", "ปลดระวาง"),
             ],
             value="all",
+            width=180,
         )
-        self.equipment_name_field = ft.TextField(label="Equipment name")
-        self.equipment_code_field = ft.TextField(label="Equipment code")
-        self.category_field = ft.TextField(label="Category")
-        self.asset_code_field = ft.TextField(label="Asset code")
-        self.location_field = ft.TextField(label="Location")
-        self.reason_field = ft.TextField(label="Reason")
+        
+        self.equipment_name_field = ft.TextField(label="ชื่ออุปกรณ์", hint_text="เช่น Microscope X-200", expand=True)
+        self.equipment_code_field = ft.TextField(label="รหัสอุปกรณ์", hint_text="เช่น EQ-300", expand=True)
+        self.category_field = ft.TextField(label="หมวดหมู่", hint_text="เช่น Research / IT", expand=True)
+        
+        self.asset_code_field = ft.TextField(label="รหัสสินทรัพย์", hint_text="เช่น AST-010", expand=True)
+        self.location_field = ft.TextField(label="สถานที่", hint_text="เช่น Lab A - Shelf 2", expand=True)
+        
+        self.reason_field = ft.TextField(label="เหตุผล / หมายเหตุ", hint_text="รายละเอียดการอัปเดต", expand=True)
         self.status_action_dropdown = ft.Dropdown(
-            label="Action",
+            label="การดำเนินการ",
             options=[
-                ft.dropdown.Option("relocate", "Relocate"),
-                ft.dropdown.Option("maintenance", "Repair complete"),
-                ft.dropdown.Option("retired", "Retire"),
+                ft.dropdown.Option("relocate", "ย้ายตำแหน่ง"),
+                ft.dropdown.Option("maintenance", "ซ่อมเสร็จ"),
+                ft.dropdown.Option("retired", "ปลดระวาง"),
             ],
             value="relocate",
+            width=200,
         )
-        self.feedback_text = ft.Text("", size=13, color=ft.Colors.GREY_700)
+        
+        self.feedback_text = ft.Text("", size=13, color=ft.Colors.GREY_700, weight=ft.FontWeight.W_500)
         self.unit_cards_container = ft.Container(expand=True)
+        self.count_badge = ft.Text("", size=13, color=COLOR_TEXT_SECONDARY, weight=ft.FontWeight.W_500)
+        
         self._build_view()
 
     def _build_view(self) -> None:
+        header = build_page_header(
+            title="คลังอุปกรณ์ห้องปฏิบัติการ",
+            subtitle="ค้นหา ตรวจสอบ และจัดการข้อมูลอุปกรณ์ในคลัง",
+            icon=ft.Icons.INVENTORY_2,
+        )
+
+        search_bar = build_card(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[self.search_field, self.status_dropdown],
+                        spacing=12,
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.ElevatedButton(
+                                "ค้นหา",
+                                icon=ft.Icons.SEARCH,
+                                style=ft.ButtonStyle(
+                                    color=ft.Colors.WHITE,
+                                    bgcolor=ft.Colors.BLUE_600,
+                                    padding=ft.padding.symmetric(horizontal=20, vertical=12),
+                                    shape=ft.RoundedRectangleBorder(radius=8),
+                                ),
+                                on_click=self._handle_search,
+                            ),
+                            ft.OutlinedButton(
+                                "รีเซ็ต",
+                                icon=ft.Icons.REFRESH,
+                                style=ft.ButtonStyle(
+                                    padding=ft.padding.symmetric(horizontal=16, vertical=12),
+                                    shape=ft.RoundedRectangleBorder(radius=8),
+                                ),
+                                on_click=self._handle_reset,
+                            ),
+                            ft.Container(expand=True),
+                            self.count_badge,
+                        ],
+                        spacing=12,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=12,
+            ),
+            padding=16,
+        )
+
+        management_tabs = ft.Tabs(
+            selected_index=0,
+            animation_duration=200,
+            tabs=[
+                ft.Tab(
+                    text="+ เพิ่มอุปกรณ์ใหม่",
+                    icon=ft.Icons.ADD_BOX_OUTLINED,
+                    content=ft.Container(
+                        padding=16,
+                        content=ft.Column(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        self.equipment_name_field,
+                                        self.equipment_code_field,
+                                        self.category_field,
+                                    ],
+                                    spacing=12,
+                                ),
+                                ft.Row(
+                                    controls=[
+                                        ft.ElevatedButton(
+                                            "บันทึกอุปกรณ์",
+                                            icon=ft.Icons.SAVE,
+                                            style=ft.ButtonStyle(
+                                                color=ft.Colors.WHITE,
+                                                bgcolor=ft.Colors.GREEN_600,
+                                            ),
+                                            on_click=self._handle_create_equipment,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                            spacing=12,
+                        ),
+                    ),
+                ),
+                ft.Tab(
+                    text="+ เพิ่มหน่วยสินทรัพย์",
+                    icon=ft.Icons.POST_ADD,
+                    content=ft.Container(
+                        padding=16,
+                        content=ft.Column(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        self.asset_code_field,
+                                        self.location_field,
+                                    ],
+                                    spacing=12,
+                                ),
+                                ft.Row(
+                                    controls=[
+                                        ft.ElevatedButton(
+                                            "บันทึกหน่วยสินทรัพย์",
+                                            icon=ft.Icons.SAVE,
+                                            style=ft.ButtonStyle(
+                                                color=ft.Colors.WHITE,
+                                                bgcolor=ft.Colors.GREEN_600,
+                                            ),
+                                            on_click=self._handle_create_unit,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                            spacing=12,
+                        ),
+                    ),
+                ),
+                ft.Tab(
+                    text="อัปเดตสถานะหน่วย",
+                    icon=ft.Icons.EDIT_NOTE,
+                    content=ft.Container(
+                        padding=16,
+                        content=ft.Column(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        self.status_action_dropdown,
+                                        self.reason_field,
+                                    ],
+                                    spacing=12,
+                                ),
+                                ft.Row(
+                                    controls=[
+                                        ft.ElevatedButton(
+                                            "ดำเนินการอัปเดต",
+                                            icon=ft.Icons.CHECK,
+                                            style=ft.ButtonStyle(
+                                                color=ft.Colors.WHITE,
+                                                bgcolor=ft.Colors.BLUE_600,
+                                            ),
+                                            on_click=self._handle_update_unit,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                            spacing=12,
+                        ),
+                    ),
+                ),
+            ],
+            expand=False,
+        )
+
+        management_card = build_card(
+            content=management_tabs,
+            padding=0,
+        )
+
         self.content = ft.Column(
             controls=[
-                ft.Text("Inventory", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("Search, manage, and review equipment units.", size=14, color=ft.Colors.GREY_700),
-                ft.Row(controls=[self.search_field, self.status_dropdown], spacing=12),
-                ft.Row(
-                    controls=[
-                        ft.Button("Search", on_click=self._handle_search),
-                        ft.OutlinedButton("Reset", on_click=self._handle_reset),
-                    ],
-                    spacing=12,
-                ),
-                ft.Column(
-                    controls=[
-                        ft.Text("Add equipment", size=18, weight=ft.FontWeight.BOLD),
-                        self.equipment_name_field,
-                        self.equipment_code_field,
-                        self.category_field,
-                        ft.Button("Save equipment", on_click=self._handle_create_equipment),
-                    ],
-                    spacing=8,
-                ),
-                ft.Column(
-                    controls=[
-                        ft.Text("Add unit", size=18, weight=ft.FontWeight.BOLD),
-                        self.asset_code_field,
-                        self.location_field,
-                        ft.Button("Save unit", on_click=self._handle_create_unit),
-                    ],
-                    spacing=8,
-                ),
-                ft.Column(
-                    controls=[
-                        ft.Text("Update unit", size=18, weight=ft.FontWeight.BOLD),
-                        self.status_action_dropdown,
-                        self.reason_field,
-                        ft.Button("Apply action", on_click=self._handle_update_unit),
-                    ],
-                    spacing=8,
-                ),
+                header,
+                search_bar,
+                management_card,
                 self.feedback_text,
                 self.unit_cards_container,
             ],
-            spacing=12,
+            spacing=16,
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
         )
-        self.content.scroll = ft.ScrollMode.AUTO
+
         self._render_units()
 
     def _render_units(self) -> None:
-        units = self.service.search_units(self.search_field.value or "", self.status_dropdown.value if self.status_dropdown.value != "all" else None)
+        units = self.service.search_units(
+            self.search_field.value or "",
+            self.status_dropdown.value if self.status_dropdown.value != "all" else None,
+        )
+        
+        self.count_badge.value = f"พบทั้งหมด {len(units)} รายการ"
+
         if not units:
-            self.unit_cards_container.content = build_state_view("No results", "Try another search or status filter.", icon=ft.Icons.INVENTORY_2_OUTLINED)
+            self.unit_cards_container.content = build_state_view(
+                "ไม่พบผลลัพธ์การค้นหา",
+                "ลองเปลี่ยนคำค้นหาหรือเลือกตัวกรองสถานะเป็น 'ทั้งหมด'",
+                icon=ft.Icons.INVENTORY_2_OUTLINED,
+            )
             return
 
-        cards = [
-            ft.Container(
-                content=ft.Column(
-                    controls=[
-                        ft.Text(unit.asset_code, weight=ft.FontWeight.BOLD),
-                        ft.Text(unit.equipment_name, size=13, color=ft.Colors.GREY_700),
-                        ft.Text(unit.status.title(), size=12, color=ft.Colors.BLUE_700),
-                        ft.Text(unit.location, size=12, color=ft.Colors.GREY_600),
-                    ],
-                    spacing=4,
-                    tight=True,
-                ),
-                padding=12,
-                border=ft.border.Border(
-                    left=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                    right=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                    top=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                    bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                ),
-                border_radius=8,
-                width=220,
+        cards = []
+        for unit in units:
+            unit_icon = (
+                ft.Icons.LAPTOP_MAC
+                if "laptop" in unit.equipment_name.lower()
+                else ft.Icons.BIOTECH
+                if "microscope" in unit.equipment_name.lower()
+                else ft.Icons.DEVICES
             )
-            for unit in units[:6]
-        ]
-        self.unit_cards_container.content = ft.Row(controls=cards, wrap=True, spacing=12, run_spacing=12)
+
+            card_content = ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Container(
+                                content=ft.Icon(unit_icon, size=20, color=ft.Colors.BLUE_600),
+                                padding=8,
+                                border_radius=8,
+                                bgcolor=ft.Colors.BLUE_50,
+                            ),
+                            ft.Column(
+                                controls=[
+                                    ft.Text(
+                                        unit.asset_code,
+                                        weight=ft.FontWeight.BOLD,
+                                        size=15,
+                                        color=COLOR_TEXT_PRIMARY,
+                                    ),
+                                    ft.Text(
+                                        unit.equipment_name,
+                                        size=13,
+                                        color=COLOR_TEXT_SECONDARY,
+                                    ),
+                                ],
+                                spacing=1,
+                                tight=True,
+                                expand=True,
+                            ),
+                        ],
+                        spacing=10,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Divider(height=12, color=ft.Colors.GREY_200),
+                    ft.Row(
+                        controls=[
+                            build_status_chip(unit.status, self._translate_status(unit.status)),
+                        ],
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.Icon(ft.Icons.LOCATION_ON_OUTLINED, size=14, color=COLOR_TEXT_SECONDARY),
+                            ft.Text(
+                                unit.location,
+                                size=12,
+                                color=COLOR_TEXT_SECONDARY,
+                                overflow=ft.TextOverflow.ELLIPSIS,
+                                expand=True,
+                            ),
+                        ],
+                        spacing=4,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=8,
+                tight=True,
+            )
+
+            card = build_card(
+                content=card_content,
+                padding=14,
+                width=240,
+                on_click=lambda e, code=unit.asset_code: self._handle_card_click(code),
+            )
+            cards.append(card)
+
+        self.unit_cards_container.content = ft.Row(
+            controls=cards,
+            wrap=True,
+            spacing=12,
+            run_spacing=12,
+        )
+
+    def _handle_card_click(self, asset_code: str) -> None:
+        self.asset_code_field.value = asset_code
+        self.feedback_text.value = f"เลือกหน่วย {asset_code} แล้ว"
+        self.feedback_text.color = ft.Colors.BLUE_700
+        self.update()
 
     def _handle_search(self, e: ft.ControlEvent) -> None:
         self._render_units()
@@ -135,13 +351,13 @@ class InventoryView(ft.Container):
         code = self.equipment_code_field.value or ""
         category = self.category_field.value or ""
         if not name or not code or not category:
-            self.feedback_text.value = "Please complete the equipment form before saving."
+            self.feedback_text.value = "กรุณากรอกฟอร์มอุปกรณ์ให้ครบก่อนบันทึก"
             self.feedback_text.color = ft.Colors.RED_700
             self.update()
             return
 
         self.service.create_equipment(name, code, category)
-        self.feedback_text.value = f"Created equipment {code}."
+        self.feedback_text.value = f"สร้างอุปกรณ์ {code} แล้ว"
         self.feedback_text.color = ft.Colors.GREEN_700
         self.equipment_name_field.value = ""
         self.equipment_code_field.value = ""
@@ -152,37 +368,46 @@ class InventoryView(ft.Container):
         asset_code = self.asset_code_field.value or ""
         location = self.location_field.value or ""
         if not asset_code or not location:
-            self.feedback_text.value = "Please enter an asset code and location."
+            self.feedback_text.value = "กรุณาใส่รหัสสินทรัพย์และสถานที่"
             self.feedback_text.color = ft.Colors.RED_700
             self.update()
             return
 
         created = self.service.create_unit(asset_code=asset_code, equipment_id="eq-1", location=location)
         if created is None:
-            self.feedback_text.value = "Asset code already exists."
+            self.feedback_text.value = "รหัสสินทรัพย์ซ้ำ"
             self.feedback_text.color = ft.Colors.RED_700
             self.update()
             return
 
-        self.feedback_text.value = f"Created unit {asset_code}."
+        self.feedback_text.value = f"สร้างหน่วย {asset_code} แล้ว"
         self.feedback_text.color = ft.Colors.GREEN_700
         self.asset_code_field.value = ""
         self.location_field.value = ""
         self._render_units()
         self.update()
 
+    def _translate_status(self, status: str) -> str:
+        return {
+            "available": "พร้อมใช้งาน",
+            "borrowed": "ถูกยืม",
+            "maintenance": "กำลังบำรุงรักษา",
+            "reported_lost": "แจ้งหาย",
+            "retired": "ปลดระวาง",
+        }.get(status, status.title())
+
     def _handle_update_unit(self, e: ft.ControlEvent) -> None:
         asset_code = self.asset_code_field.value or ""
         reason = self.reason_field.value or ""
         if not asset_code or not reason:
-            self.feedback_text.value = "Please provide an asset code and reason for the update."
+            self.feedback_text.value = "กรุณาใส่รหัสสินทรัพย์และเหตุผลสำหรับการอัปเดต"
             self.feedback_text.color = ft.Colors.RED_700
             self.update()
             return
 
         unit = self.service.get_unit(asset_code)
         if unit is None:
-            self.feedback_text.value = "Asset code not found."
+            self.feedback_text.value = "ไม่พบรหัสสินทรัพย์"
             self.feedback_text.color = ft.Colors.RED_700
             self.update()
             return
@@ -194,7 +419,7 @@ class InventoryView(ft.Container):
             target_status = status
 
         self.service.update_unit_status(unit.id, target_status, location=self.location_field.value or unit.location, reason=reason)
-        self.feedback_text.value = f"Updated unit {asset_code}."
+        self.feedback_text.value = f"อัปเดตหน่วย {asset_code} แล้ว"
         self.feedback_text.color = ft.Colors.GREEN_700
         self.asset_code_field.value = ""
         self.location_field.value = ""
@@ -205,3 +430,4 @@ class InventoryView(ft.Container):
 
 def build_inventory_view(service: FakeInventoryService | None = None) -> ft.Container:
     return InventoryView(service)
+
