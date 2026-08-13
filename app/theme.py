@@ -1,21 +1,21 @@
 import flet as ft
 
 APP_TITLE = "Lab Equipment Borrowing"
-PAGE_PADDING = 24
-NAV_WIDTH = 240
+PAGE_PADDING = 32
+NAV_WIDTH = 279
 
 # Color Tokens
 COLOR_PRIMARY = ft.Colors.BLUE_600
 COLOR_PRIMARY_DARK = ft.Colors.BLUE_800
-COLOR_BG = "#F8FAFC"
-COLOR_SURFACE = ft.Colors.WHITE
-COLOR_SIDEBAR_BG = "#0F172A"
-COLOR_SIDEBAR_TEXT = "#94A3B8"
-COLOR_SIDEBAR_ACTIVE = "#38BDF8"
+COLOR_BG = ft.Colors.SURFACE_CONTAINER_LOW
+COLOR_SURFACE = ft.Colors.SURFACE
+COLOR_SIDEBAR_BG = ft.Colors.SURFACE
+COLOR_SIDEBAR_TEXT = ft.Colors.ON_SURFACE_VARIANT
+COLOR_SIDEBAR_ACTIVE = ft.Colors.PRIMARY
 
-COLOR_TEXT_PRIMARY = "#0F172A"
-COLOR_TEXT_SECONDARY = "#64748B"
-COLOR_BORDER = "#E2E8F0"
+COLOR_TEXT_PRIMARY = ft.Colors.ON_SURFACE
+COLOR_TEXT_SECONDARY = ft.Colors.ON_SURFACE_VARIANT
+COLOR_BORDER = ft.Colors.OUTLINE_VARIANT
 
 # Status Badges Theme (Foreground, Background, Icon)
 STATUS_THEMES = {
@@ -79,6 +79,18 @@ STATUS_THEMES = {
         "bgcolor": ft.Colors.GREY_100,
         "icon": ft.Icons.TASK_ALT,
     },
+    "open": {
+        "text": "รอดำเนินการ",
+        "color": ft.Colors.RED_700,
+        "bgcolor": ft.Colors.RED_50,
+        "icon": ft.Icons.REPORT_PROBLEM_OUTLINED,
+    },
+    "resolved": {
+        "text": "ปิดเคสแล้ว",
+        "color": ft.Colors.GREEN_700,
+        "bgcolor": ft.Colors.GREEN_50,
+        "icon": ft.Icons.TASK_ALT,
+    },
 }
 
 NAVIGATION_ITEMS = [
@@ -86,5 +98,6 @@ NAVIGATION_ITEMS = [
     {"label": "เจ้าหน้าที่ & ผู้ยืม", "icon": ft.Icons.PEOPLE_OUTLINED, "selected_icon": ft.Icons.PEOPLE, "route": "staff_borrowers"},
     {"label": "ยืมอุปกรณ์", "icon": ft.Icons.ASSIGNMENT_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT, "route": "borrow_flow"},
     {"label": "สัญญายืม & คืน", "icon": ft.Icons.RECEIPT_LONG_OUTLINED, "selected_icon": ft.Icons.RECEIPT_LONG, "route": "loans"},
+    {"label": "กรณีสูญหาย", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED, "selected_icon": ft.Icons.REPORT_PROBLEM, "route": "lost_cases"},
     {"label": "ประวัติการใช้งาน", "icon": ft.Icons.HISTORY_OUTLINED, "selected_icon": ft.Icons.HISTORY, "route": "history"},
 ]

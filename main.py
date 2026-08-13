@@ -18,6 +18,7 @@ from app.views.borrow_flow import BorrowFlowView
 from app.views.history import build_history_view
 from app.views.inventory import build_inventory_view
 from app.views.loans import LoansView
+from app.views.lost_cases import LostCasesView
 from app.views.staff_borrowers import StaffBorrowersView
 
 
@@ -41,6 +42,7 @@ def get_navigation_items():
         {"label": "Staff", "icon": ft.Icons.PEOPLE_OUTLINED},
         {"label": "Borrowers", "icon": ft.Icons.PERSON_OUTLINED},
         {"label": "Loans", "icon": ft.Icons.RECEIPT_LONG_OUTLINED},
+        {"label": "Lost cases", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED},
         {"label": "History", "icon": ft.Icons.HISTORY_OUTLINED},
     ]
 
@@ -51,7 +53,7 @@ def build_screen(
 
     return ft.Container(
         expand=True,
-        padding=24,
+        padding=32,
         alignment=ft.Alignment.TOP_LEFT,
         bgcolor=COLOR_BG,
         content=content,
@@ -94,7 +96,7 @@ def build_app_shell(
                 ),
                 ft.Column(
                     controls=[
-                        ft.Text("LabEquip", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                        ft.Text("LabEquip", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
                         ft.Text("ระบบยืมอุปกรณ์", size=11, color=COLOR_SIDEBAR_TEXT),
                     ],
                     spacing=1,
@@ -170,7 +172,12 @@ def build_app_shell(
 
         elif index == 4:
             content_area.content = build_screen(
-                build_history_view()
+                LostCasesView(service)
+            )
+
+        elif index == 5:
+            content_area.content = build_screen(
+                build_history_view(service)
             )
 
         else:
@@ -181,6 +188,21 @@ def build_app_shell(
         update_control(content_area)
 
     navigation.on_change = on_navigation_change
+
+    mobile_navigation = ft.NavigationBar(
+        selected_index=0,
+        visible=False,
+        label_behavior=ft.NavigationBarLabelBehavior.ONLY_SHOW_SELECTED,
+        destinations=[
+            ft.NavigationBarDestination(
+                icon=item["icon"],
+                selected_icon=item.get("selected_icon", item["icon"]),
+                label=item["label"],
+            )
+            for item in NAVIGATION_ITEMS
+        ],
+        on_change=on_navigation_change,
+    )
 
     # ========================================================
     # SIDEBAR
@@ -216,8 +238,24 @@ def build_app_shell(
     return ft.Container(
         expand=True,
         padding=0,
-        content=row,
+        content=ft.Column(
+            controls=[row, mobile_navigation],
+            spacing=0,
+            expand=True,
+        ),
     )
+
+
+def apply_shell_width(shell: ft.Container, width: float | None) -> None:
+    """Switch between desktop rail and mobile bottom navigation."""
+    if width is None:
+        return
+    row, mobile_navigation = shell.content.controls
+    is_mobile = width <= 1023
+    row.controls[0].visible = not is_mobile
+    row.controls[1].visible = not is_mobile
+    mobile_navigation.visible = is_mobile
+    update_control(shell)
 
 
 def build_home(services=None) -> ft.SafeArea:
@@ -232,20 +270,18 @@ def main(
 ) -> None:
 
     page.title = APP_TITLE
-    page.theme_mode = ft.ThemeMode.LIGHT
+    page.theme_mode = ft.ThemeMode.SYSTEM
+    page.theme = ft.Theme(color_scheme_seed=ft.Colors.BLUE_600)
+    page.dark_theme = ft.Theme(color_scheme_seed=ft.Colors.BLUE_400)
     page.padding = 0
     page.bgcolor = COLOR_BG
 
     services = create_app_services()
 
-    page.add(
-        ft.Container(
-            expand=True,
-            content=build_app_shell(
-                services
-            ),
-        )
-    )
+    shell = build_app_shell(services)
+    apply_shell_width(shell, page.width)
+    page.on_resized = lambda _: apply_shell_width(shell, page.width)
+    page.add(ft.Container(expand=True, content=shell))
 
 
 if __name__ == "__main__":

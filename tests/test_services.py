@@ -1,5 +1,6 @@
 from app.services.container import create_app_services
 from app.services.fake_services import FakeInventoryService
+from app.services.sqlite_adapter import SQLiteInventoryAdapter
 
 
 def test_fake_inventory_service_contains_seeded_fixtures() -> None:
@@ -11,8 +12,9 @@ def test_fake_inventory_service_contains_seeded_fixtures() -> None:
     assert {"available", "borrowed", "maintenance", "reported_lost", "retired"} <= statuses
 
 
-def test_container_returns_fake_services_by_default() -> None:
+def test_container_returns_sqlite_services_by_default(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
     services = create_app_services()
 
-    assert services.inventory_service is not None
-    assert services.inventory_service.list_units()
+    assert isinstance(services.inventory_service, SQLiteInventoryAdapter)
+    assert services.inventory_service.list_units() == []

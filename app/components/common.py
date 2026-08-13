@@ -62,15 +62,9 @@ def build_card(
         padding=padding if isinstance(padding, ft.Padding) else ft.Padding(left=padding, top=padding, right=padding, bottom=padding),
         width=width,
         bgcolor=bgcolor,
-        border_radius=12,
+        border_radius=24,
         border=ft.Border.all(1, border_color or COLOR_BORDER),
-        shadow=ft.BoxShadow(
-            blur_radius=8,
-            spread_radius=0,
-            color=ft.Colors.with_opacity(0.04, ft.Colors.BLACK),
-            offset=ft.Offset(0, 2),
-        ),
-        animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+        animate=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
     )
 
     if on_click is not None:
@@ -80,20 +74,8 @@ def build_card(
         def on_hover(e: ft.ControlEvent) -> None:
             if e.data == "true":
                 card.border = ft.Border.all(1, ft.Colors.BLUE_400)
-                card.shadow = ft.BoxShadow(
-                    blur_radius=12,
-                    spread_radius=1,
-                    color=ft.Colors.with_opacity(0.08, ft.Colors.BLUE_500),
-                    offset=ft.Offset(0, 4),
-                )
             else:
                 card.border = ft.Border.all(1, border_color or COLOR_BORDER)
-                card.shadow = ft.BoxShadow(
-                    blur_radius=8,
-                    spread_radius=0,
-                    color=ft.Colors.with_opacity(0.04, ft.Colors.BLACK),
-                    offset=ft.Offset(0, 2),
-                )
             card.update()
 
         card.on_hover = on_hover

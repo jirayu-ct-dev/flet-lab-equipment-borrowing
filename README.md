@@ -56,6 +56,8 @@ docker compose up --build -d
 
 เปิด [http://localhost:8080](http://localhost:8080) ในเบราว์เซอร์
 
+ข้อมูล SQLite ถูกเก็บไว้ที่ `./data/lab_equipment.db` และยังคงอยู่หลัง restart container
+
 หยุดและนำ container ออกด้วย:
 
 ```bash

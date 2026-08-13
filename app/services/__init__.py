@@ -14,6 +14,7 @@ from app.services.master_data import (
 )
 from app.services.queries import SQLiteLoanQueryService
 from app.services.returns import SQLiteReturnService
+from app.services.sqlite_adapter import SQLiteInventoryAdapter
 
 __all__ = [
     "AppServices",
@@ -27,6 +28,7 @@ __all__ = [
     "SQLiteLoanQueryService",
     "SQLiteLoanService",
     "SQLiteReturnService",
+    "SQLiteInventoryAdapter",
     "SQLiteStaffService",
     "SQLiteUnitService",
     "create_app_services",

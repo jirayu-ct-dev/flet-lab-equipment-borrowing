@@ -43,6 +43,14 @@ class BorrowerRecord:
 
 
 @dataclass(frozen=True)
+class LocationRecord:
+    id: str
+    location_code: str
+    label: str
+    status: str = "active"
+
+
+@dataclass(frozen=True)
 class BorrowDraft:
     id: str
     borrower_code: str
@@ -78,6 +86,20 @@ class HistoryEvent:
     equipment_name: str = ""
     asset_code: str = ""
     unit_id: str = ""
+
+
+@dataclass(frozen=True)
+class LostCaseRecord:
+    id: str
+    asset_code: str
+    equipment_name: str
+    borrower_code: str
+    reported_at: str
+    assessed_value: str | None = None
+    approved_compensation: str | None = None
+    resolution: str | None = None
+    approved_by_staff_code: str | None = None
+    note: str | None = None
 
 
 class FakeInventoryService:
@@ -138,6 +160,69 @@ class FakeInventoryService:
                 unit_id="unit-3",
             ),
         ]
+        self._lost_cases = [
+            LostCaseRecord(
+                id="case-1",
+                asset_code="AST-004",
+                equipment_name="Microscope",
+                borrower_code="BR-001",
+                reported_at=date.today().isoformat(),
+            )
+        ]
+
+    def list_lost_cases(
+        self, *, query: str | None = None, status: str | None = None
+    ) -> list[LostCaseRecord]:
+        cases = list(self._lost_cases)
+        if query:
+            keyword = query.lower()
+            cases = [
+                case
+                for case in cases
+                if keyword in case.asset_code.lower()
+                or keyword in case.equipment_name.lower()
+                or keyword in case.borrower_code.lower()
+            ]
+        if status == "open":
+            cases = [case for case in cases if case.resolution is None]
+        elif status == "resolved":
+            cases = [case for case in cases if case.resolution is not None]
+        return cases
+
+    def resolve_lost_case(
+        self,
+        case_id: str,
+        *,
+        resolution: str,
+        assessed_value: str,
+        approved_compensation: str,
+        staff_code: str,
+        reason: str,
+        note: str | None = None,
+        **_: object,
+    ) -> LostCaseRecord | None:
+        if not assessed_value or not approved_compensation or not reason.strip():
+            return None
+        if self.get_staff(staff_code) is None:
+            return None
+        for index, case in enumerate(self._lost_cases):
+            if case.id != case_id or case.resolution is not None:
+                continue
+            resolved = LostCaseRecord(
+                id=case.id,
+                asset_code=case.asset_code,
+                equipment_name=case.equipment_name,
+                borrower_code=case.borrower_code,
+                reported_at=case.reported_at,
+                assessed_value=assessed_value,
+                approved_compensation=approved_compensation,
+                resolution=resolution,
+                approved_by_staff_code=staff_code,
+                note=note,
+            )
+            self._lost_cases[index] = resolved
+            return resolved
+        return None
 
     def list_history(
         self,
@@ -165,6 +250,10 @@ class FakeInventoryService:
 
     def list_equipment(self) -> list[InventoryEquipment]:
         return list(self._equipment)
+
+    def list_locations(self) -> list[LocationRecord]:
+        labels = sorted({unit.location for unit in self._units if unit.location != "With Borrower"})
+        return [LocationRecord(id=f"location-{index}", location_code=f"LOC-{index:03d}", label=label) for index, label in enumerate(labels, 1)]
 
     def list_units(self) -> list[InventoryUnit]:
         return list(self._units)
@@ -207,7 +296,42 @@ class FakeInventoryService:
         for index, unit in enumerate(self._units):
             if unit.id != unit_id:
                 continue
+            if status == "relocate":
+                target_status = unit.status
+            elif status == "maintenance":
+                if unit.status != "maintenance":
+                    return None
+                target_status = "available"
+            elif status == "retired":
+                if unit.status != "available":
+                    return None
+                target_status = "retired"
+            else:
+                return None
             updated_unit = InventoryUnit(
+                id=unit.id,
+                asset_code=unit.asset_code,
+                equipment_name=unit.equipment_name,
+                status=target_status,
+                location=location or unit.location,
+                note=reason,
+            )
+            self._units[index] = updated_unit
+            return updated_unit
+        return None
+
+    def _set_unit_state(
+        self,
+        unit_id: str,
+        status: str,
+        *,
+        location: str | None = None,
+        reason: str | None = None,
+    ) -> InventoryUnit | None:
+        for index, unit in enumerate(self._units):
+            if unit.id != unit_id:
+                continue
+            updated = InventoryUnit(
                 id=unit.id,
                 asset_code=unit.asset_code,
                 equipment_name=unit.equipment_name,
@@ -215,8 +339,8 @@ class FakeInventoryService:
                 location=location or unit.location,
                 note=reason,
             )
-            self._units[index] = updated_unit
-            return updated_unit
+            self._units[index] = updated
+            return updated
         return None
 
     def search_units(self, keyword: str | None = None, status: str | None = None) -> list[InventoryUnit]:
@@ -314,7 +438,7 @@ class FakeInventoryService:
             if draft.id != draft_id:
                 continue
             for unit_id in draft.unit_ids:
-                self.update_unit_status(unit_id, "borrowed")
+                self._set_unit_state(unit_id, "borrowed", location="With Borrower")
             confirmed = BorrowDraft(
                 id=draft.id,
                 borrower_code=draft.borrower_code,
@@ -361,7 +485,7 @@ class FakeInventoryService:
     def get_loan(self, loan_id: str) -> LoanRecord | None:
         return next((loan for loan in self._loans if loan.id == loan_id), None)
 
-    def return_loan_units(self, loan_id: str, unit_ids: list[str], outcome: str, condition: str | None = None) -> LoanRecord | None:
+    def return_loan_units(self, loan_id: str, unit_ids: list[str], outcome: str, condition: str | None = None, *, staff_code: str | None = None, location_id: str | None = None) -> LoanRecord | None:
         loan = self.get_loan(loan_id)
         if loan is None:
             return None
@@ -374,7 +498,7 @@ class FakeInventoryService:
         for unit_id in unit_ids:
             if unit_id not in loan.unit_ids or unit_id in returned:
                 continue
-            self.update_unit_status(unit_id, "available" if outcome == "returned" else "maintenance" if outcome == "maintenance" else "reported_lost", reason=condition)
+            self._set_unit_state(unit_id, "available" if outcome == "returned" else "maintenance" if outcome == "maintenance" else "reported_lost", reason=condition)
             updated_units.append(unit_id)
             returned.add(unit_id)
 

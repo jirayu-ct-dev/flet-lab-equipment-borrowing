@@ -42,7 +42,14 @@ class InventoryView(ft.Container):
         self.category_field = ft.TextField(label="หมวดหมู่", hint_text="เช่น Research / IT", expand=True)
 
         self.asset_code_field = ft.TextField(label="รหัสสินทรัพย์", hint_text="เช่น AST-010", expand=True)
+        self.equipment_dropdown = ft.Dropdown(
+            label="ประเภทอุปกรณ์",
+            hint_text="เลือกประเภทอุปกรณ์",
+            options=[],
+            expand=True,
+        )
         self.location_field = ft.TextField(label="สถานที่", hint_text="เช่น Lab A - Shelf 2", expand=True)
+        self._refresh_equipment_options()
 
         self.reason_field = ft.TextField(label="เหตุผล / หมายเหตุ", hint_text="รายละเอียดการอัปเดต", expand=True)
         self.status_action_dropdown = ft.Dropdown(
@@ -146,7 +153,7 @@ class InventoryView(ft.Container):
                         controls=[
                             ft.Text("เพิ่มหน่วยสินทรัพย์", weight=ft.FontWeight.BOLD),
                             ft.Row(
-                                controls=[self.asset_code_field, self.location_field],
+                                controls=[self.equipment_dropdown, self.asset_code_field, self.location_field],
                                 spacing=12,
                             ),
                             ft.Row(
@@ -209,6 +216,15 @@ class InventoryView(ft.Container):
         )
 
         self._render_units()
+
+    def _refresh_equipment_options(self) -> None:
+        equipment = self.service.list_equipment()
+        self.equipment_dropdown.options = [
+            ft.dropdown.Option(item.id, f"{item.equipment_code} — {item.name}")
+            for item in equipment
+        ]
+        if equipment and self.equipment_dropdown.value not in {item.id for item in equipment}:
+            self.equipment_dropdown.value = equipment[0].id
 
     def _render_units(self) -> None:
         units = self.service.search_units(
@@ -310,6 +326,9 @@ class InventoryView(ft.Container):
 
     def _handle_card_click(self, asset_code: str) -> None:
         self.asset_code_field.value = asset_code
+        unit = self.service.get_unit(asset_code)
+        if unit is not None and unit.location != "With Borrower":
+            self.location_field.value = unit.location
         self.feedback_text.value = f"เลือกหน่วย {asset_code} แล้ว"
         self.feedback_text.color = ft.Colors.BLUE_700
         update_control(self)
@@ -332,7 +351,13 @@ class InventoryView(ft.Container):
             update_control(self)
             return
 
-        self.service.create_equipment(name, code, category)
+        created = self.service.create_equipment(name, code, category)
+        if created is None:
+            self.feedback_text.value = "ไม่สามารถสร้างอุปกรณ์ได้ กรุณาตรวจสอบรหัสซ้ำ"
+            self.feedback_text.color = ft.Colors.RED_700
+            update_control(self)
+            return
+        self._refresh_equipment_options()
         self.feedback_text.value = f"สร้างอุปกรณ์ {code} แล้ว"
         self.feedback_text.color = ft.Colors.GREEN_700
         self.equipment_name_field.value = ""
@@ -349,7 +374,13 @@ class InventoryView(ft.Container):
             update_control(self)
             return
 
-        created = self.service.create_unit(asset_code=asset_code, equipment_id="eq-1", location=location)
+        equipment_id = self.equipment_dropdown.value
+        if not equipment_id:
+            self.feedback_text.value = "กรุณาเลือกประเภทอุปกรณ์"
+            self.feedback_text.color = ft.Colors.RED_700
+            update_control(self)
+            return
+        created = self.service.create_unit(asset_code=asset_code, equipment_id=equipment_id, location=location)
         if created is None:
             self.feedback_text.value = "รหัสสินทรัพย์ซ้ำ"
             self.feedback_text.color = ft.Colors.RED_700
@@ -388,14 +419,19 @@ class InventoryView(ft.Container):
             update_control(self)
             return
 
-        status = self.status_action_dropdown.value or "relocate"
-        if status == "maintenance":
-            target_status = "available"
-        else:
-            target_status = status
-
-        self.service.update_unit_status(unit.id, target_status, location=self.location_field.value or unit.location, reason=reason)
-        self.feedback_text.value = f"อัปเดตหน่วย {asset_code} แล้ว"
+        action = self.status_action_dropdown.value or "relocate"
+        updated = self.service.update_unit_status(
+            unit.id,
+            action,
+            location=self.location_field.value or unit.location,
+            reason=reason,
+        )
+        if updated is None:
+            self.feedback_text.value = "ไม่สามารถดำเนินการได้ กรุณาตรวจสอบสถานะ ตำแหน่ง และเหตุผล"
+            self.feedback_text.color = ft.Colors.RED_700
+            update_control(self)
+            return
+        self.feedback_text.value = f"อัปเดตหน่วย {asset_code} เป็น {updated.status} แล้ว"
         self.feedback_text.color = ft.Colors.GREEN_700
         self.asset_code_field.value = ""
         self.location_field.value = ""

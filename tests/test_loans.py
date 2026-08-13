@@ -27,6 +27,9 @@ def test_loans_view_can_select_and_confirm_return() -> None:
     service = FakeInventoryService()
     view = LoansView(service)
 
+    assert view.receiving_staff_dropdown.value == "ST-001"
+    assert view.return_location_dropdown.value is not None
+
     loan = service.get_loan("loan-1")
     assert loan is not None
 

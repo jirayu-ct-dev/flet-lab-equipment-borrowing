@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Clean UI"
+  short_description: "Build complete clean UI in any frontend project"
+  default_prompt: "Use $design-clean-ui to design and implement this responsive interface in the current frontend project."

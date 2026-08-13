@@ -46,6 +46,21 @@ class LoansView(ft.Container):
         )
         self.return_action_dropdown.on_change = self._handle_return_action_change
 
+        self.receiving_staff_dropdown = ft.Dropdown(
+            label="เจ้าหน้าที่ผู้รับคืน",
+            options=[ft.dropdown.Option(item.staff_code, f"{item.staff_code} — {item.full_name}") for item in self.service.list_staff()],
+            expand=True,
+        )
+        self.return_location_dropdown = ft.Dropdown(
+            label="ตำแหน่งจัดเก็บหลังคืน",
+            options=[ft.dropdown.Option(item.id, item.label) for item in self.service.list_locations()],
+            expand=True,
+        )
+        if self.receiving_staff_dropdown.options:
+            self.receiving_staff_dropdown.value = self.receiving_staff_dropdown.options[0].key
+        if self.return_location_dropdown.options:
+            self.return_location_dropdown.value = self.return_location_dropdown.options[0].key
+
         self.return_notes = ft.TextField(
             label="สภาพอุปกรณ์ / หมายเหตุ",
             hint_text="ระบุสภาพของอุปกรณ์ที่นำมาคืน...",
@@ -97,6 +112,10 @@ class LoansView(ft.Container):
                             self.return_action_dropdown,
                             self.return_notes,
                         ],
+                        spacing=12,
+                    ),
+                    ft.Row(
+                        controls=[self.receiving_staff_dropdown, self.return_location_dropdown],
                         spacing=12,
                     ),
                     ft.Row(
@@ -322,6 +341,18 @@ class LoansView(ft.Container):
             self.confirmation_summary.color = COLOR_TEXT_SECONDARY
             return
 
+        if not self.receiving_staff_dropdown.value:
+            self.feedback.value = "กรุณาเลือกเจ้าหน้าที่ผู้รับคืน"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+
+        if self.return_action_dropdown.value != "reported_lost" and not self.return_location_dropdown.value:
+            self.feedback.value = "กรุณาเลือกตำแหน่งจัดเก็บหลังคืน"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+
         action = self.return_action_dropdown.value or "returned"
         action_text = self._translate_return_action(action)
         self.confirmation_summary.value = (
@@ -375,6 +406,8 @@ class LoansView(ft.Container):
             self.selected_unit_ids,
             self.return_action_dropdown.value or "returned",
             condition=self.return_notes.value or None,
+            staff_code=self.receiving_staff_dropdown.value,
+            location_id=self.return_location_dropdown.value,
         )
 
         if result is None:

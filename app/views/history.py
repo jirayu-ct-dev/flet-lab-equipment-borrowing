@@ -254,6 +254,10 @@ class HistoryView(ft.Container):
             "maintenance": {"icon": ft.Icons.BUILD, "color": ft.Colors.AMBER_800, "bg": ft.Colors.AMBER_50},
             "reported_lost": {"icon": ft.Icons.REPORT_PROBLEM, "color": ft.Colors.RED_700, "bg": ft.Colors.RED_50},
             "retired": {"icon": ft.Icons.DELETE_SWEEP, "color": ft.Colors.GREY_700, "bg": ft.Colors.GREY_100},
+            "acquire": {"icon": ft.Icons.ADD_BOX, "color": ft.Colors.GREEN_700, "bg": ft.Colors.GREEN_50},
+            "relocate": {"icon": ft.Icons.MOVE_DOWN, "color": ft.Colors.BLUE_700, "bg": ft.Colors.BLUE_50},
+            "repair_complete": {"icon": ft.Icons.HANDYMAN, "color": ft.Colors.GREEN_700, "bg": ft.Colors.GREEN_50},
+            "lost_resolved": {"icon": ft.Icons.FACT_CHECK, "color": ft.Colors.PURPLE_700, "bg": ft.Colors.PURPLE_50},
         }.get(event_type, {"icon": ft.Icons.HISTORY, "color": ft.Colors.BLUE_700, "bg": ft.Colors.BLUE_50})
 
         details = " • ".join(
@@ -359,6 +363,10 @@ class HistoryView(ft.Container):
             "relocated": "ย้ายตำแหน่ง",
             "retired": "ปลดระวาง",
             "repaired": "ซ่อมเสร็จสิ้น",
+            "acquire": "รับเข้าคลัง",
+            "relocate": "ย้ายตำแหน่ง",
+            "repair_complete": "ซ่อมเสร็จ",
+            "lost_resolved": "ปิดกรณีสูญหาย",
         }.get(
             event_type,
             event_type or "เหตุการณ์",
