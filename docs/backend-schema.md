@@ -55,6 +55,26 @@ Adds `audit_logs_no_update` and `audit_logs_no_delete` triggers. SQLite rejects
 updates and deletes with `audit logs are append-only`; new audit entries remain
 insertable.
 
+### Version 5 — Equipment categories
+
+Creates `equipment_categories`, migrates existing category names, and adds
+`equipment.category_id` so equipment can reference a reusable category record.
+
+### Version 6 — Seed run tracking
+
+Creates `app_seed_runs`. Docker enables `APP_SEED_DEMO=1`, and the application
+stores `general-equipment-demo-v1` after inserting the complete sample dataset.
+The marker makes container restarts idempotent while allowing the seed to be added
+once to an existing database volume.
+
+## Docker demo data
+
+`app.seed.seed_demo_data()` inserts 50 equipment units across computer,
+scientific, audiovisual, workshop, office, activity, and safety categories. It
+also creates five borrowers, five loans, five return events, locations, staff,
+inventory history, maintenance and lost-item examples. Set `APP_SEED_DEMO=0` to
+disable this behavior.
+
 ## Transaction boundaries
 
 The following operations use a single `BEGIN IMMEDIATE` transaction and roll back

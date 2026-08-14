@@ -29,7 +29,7 @@ class DashboardView(ft.Container):
         self.table_container = ft.Container(on_size_change=self._handle_table_size)
 
         self.category_name = ft.TextField(
-            label="ชื่อหมวดหมู่", hint_text="เช่น IT หรือ หนังสือวิทยาศาสตร์"
+            label="ชื่อหมวดหมู่", hint_text="เช่น คอมพิวเตอร์ วิทยาศาสตร์ หรือเครื่องมือช่าง"
         )
         self.category_form_feedback = ft.Text("", size=12)
 
@@ -50,7 +50,7 @@ class DashboardView(ft.Container):
             label="รหัสอุปกรณ์", hint_text="เช่น MON-001"
         )
         self.equipment_location = ft.TextField(
-            label="สถานที่เก็บ", hint_text="เช่น ห้อง Lab A ชั้น 2"
+            label="สถานที่เก็บ", hint_text="เช่น คลังอุปกรณ์ ชั้น 2"
         )
         self.equipment_form_feedback = ft.Text("", size=12)
 
@@ -97,7 +97,7 @@ class DashboardView(ft.Container):
             content=ft.Column(
                 controls=[
                     ft.Text(
-                        "สร้างกลุ่มสำหรับจัดอุปกรณ์ เช่น IT หรือหนังสือวิทยาศาสตร์",
+                        "สร้างกลุ่มสำหรับจัดอุปกรณ์ เช่น คอมพิวเตอร์ วิทยาศาสตร์ หรืออุปกรณ์ทั่วไป",
                         size=13,
                         color=COLOR_TEXT_SECONDARY,
                     ),

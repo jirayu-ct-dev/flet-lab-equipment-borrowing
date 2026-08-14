@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from app.database import get_database_path
+from app.seed import seed_demo_data
 
 from .sqlite_adapter import SQLiteInventoryAdapter
 
@@ -13,4 +15,7 @@ class AppServices:
 
 
 def create_app_services() -> AppServices:
-    return AppServices(inventory_service=SQLiteInventoryAdapter(get_database_path()))
+    database_path = get_database_path()
+    if os.getenv("APP_SEED_DEMO", "").strip().lower() in {"1", "true", "yes", "on"}:
+        seed_demo_data(database_path)
+    return AppServices(inventory_service=SQLiteInventoryAdapter(database_path))

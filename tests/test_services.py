@@ -14,7 +14,19 @@ def test_fake_inventory_service_contains_seeded_fixtures() -> None:
 
 def test_container_returns_sqlite_services_by_default(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.delenv("APP_SEED_DEMO", raising=False)
     services = create_app_services()
 
     assert isinstance(services.inventory_service, SQLiteInventoryAdapter)
     assert services.inventory_service.list_units() == []
+
+
+def test_container_seeds_demo_data_when_enabled(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "seeded.db"))
+    monkeypatch.setenv("APP_SEED_DEMO", "1")
+
+    services = create_app_services()
+
+    assert len(services.inventory_service.list_units()) == 50
+    assert len(services.inventory_service.list_borrowers()) == 5
+    assert len(services.inventory_service.list_loans()) == 5

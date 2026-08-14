@@ -89,15 +89,15 @@ def build_app_shell(
         content=ft.Row(
             controls=[
                 ft.Container(
-                    content=ft.Icon(ft.Icons.SCIENCE_ROUNDED, color=ft.Colors.WHITE, size=20),
+                    content=ft.Icon(ft.Icons.INVENTORY_2_ROUNDED, color=ft.Colors.WHITE, size=20),
                     bgcolor=ft.Colors.BLUE_600,
                     padding=8,
                     border_radius=8,
                 ),
                 ft.Column(
                     controls=[
-                        ft.Text("อุปกรณ์ห้องแล็บ", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                        ft.Text("ระบบยืม–คืนแบบง่าย", size=11, color=COLOR_SIDEBAR_TEXT),
+                        ft.Text("ระบบยืม–คืนอุปกรณ์", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                        ft.Text("รองรับอุปกรณ์ทุกประเภท", size=11, color=COLOR_SIDEBAR_TEXT),
                     ],
                     spacing=1,
                     tight=True,

@@ -1,6 +1,6 @@
 import flet as ft
 
-APP_TITLE = "Lab Equipment Borrowing"
+APP_TITLE = "ระบบยืม–คืนอุปกรณ์"
 PAGE_PADDING = 32
 NAV_WIDTH = 279
 CONTROL_RADIUS = 12

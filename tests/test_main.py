@@ -75,4 +75,4 @@ def test_state_view_renders_title_and_message() -> None:
 
 
 def test_app_title_is_defined() -> None:
-    assert APP_TITLE == "Lab Equipment Borrowing"
+    assert APP_TITLE == "ระบบยืม–คืนอุปกรณ์"

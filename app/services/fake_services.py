@@ -122,7 +122,7 @@ class FakeInventoryService:
             InventoryEquipment(id="eq-2", equipment_code="EQ-200", name="Microscope", category="Research"),
         ]
         self._units = [
-            InventoryUnit(id="unit-1", asset_code="AST-001", equipment_name="Laptop", status="available", location="Lab A - Shelf 1", category="IT"),
+            InventoryUnit(id="unit-1", asset_code="AST-001", equipment_name="Laptop", status="available", location="คลังอุปกรณ์ - ชั้น 1", category="คอมพิวเตอร์และไอที"),
             InventoryUnit(id="unit-2", asset_code="AST-002", equipment_name="Laptop", status="borrowed", location="With Borrower", category="IT"),
             InventoryUnit(id="unit-3", asset_code="AST-003", equipment_name="Microscope", status="maintenance", location="Repair Room", category="Research"),
             InventoryUnit(id="unit-4", asset_code="AST-004", equipment_name="Microscope", status="reported_lost", location="Lost Case", category="Research"),
@@ -133,7 +133,7 @@ class FakeInventoryService:
             StaffRecord(id="staff-2", staff_code="ST-002", full_name="Grace Hopper", email="grace@example.com", status="inactive"),
         ]
         self._borrowers = [
-            BorrowerRecord(id="borrower-1", borrower_code="BR-001", full_name="Lin Chen", department="Biochemistry", email="lin@example.com", status="active"),
+            BorrowerRecord(id="borrower-1", borrower_code="BR-001", full_name="สมชาย ใจดี", department="งานวิจัยและพัฒนา", email="somchai@example.com", status="active"),
             BorrowerRecord(id="borrower-2", borrower_code="BR-002", full_name="Mina Patel", department="Physics", email="mina@example.com", status="inactive"),
         ]
         self._borrow_drafts: list[BorrowDraft] = []

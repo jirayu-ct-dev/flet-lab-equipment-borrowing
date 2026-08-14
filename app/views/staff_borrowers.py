@@ -44,10 +44,10 @@ class StaffBorrowersView(ft.Container):
         self.staff_code = ft.TextField(label="รหัสผู้บันทึก", hint_text="เช่น ST-003", expand=True)
         self.staff_email = ft.TextField(label="อีเมล", hint_text="ada@example.com", expand=True)
 
-        self.borrower_name = ft.TextField(label="ชื่อเต็มผู้ยืม", hint_text="เช่น Lin Chen", expand=True)
+        self.borrower_name = ft.TextField(label="ชื่อเต็มผู้ยืม", hint_text="เช่น สมชาย ใจดี", expand=True)
         self.borrower_code = ft.TextField(label="รหัสผู้ยืม", hint_text="เช่น BR-003", expand=True)
-        self.borrower_department = ft.TextField(label="หน่วยงาน / ภาควิชา", hint_text="เช่น Biochemistry", expand=True)
-        self.borrower_email = ft.TextField(label="อีเมล", hint_text="lin@example.com", expand=True)
+        self.borrower_department = ft.TextField(label="หน่วยงาน / ภาควิชา", hint_text="เช่น ฝ่ายไอที หรืองานวิจัย", expand=True)
+        self.borrower_email = ft.TextField(label="อีเมล", hint_text="somchai@example.com", expand=True)
 
         self.feedback = ft.Text("", size=13, color=ft.Colors.GREY_700, weight=ft.FontWeight.W_500)
         self.staff_container = ft.Container(expand=True)
