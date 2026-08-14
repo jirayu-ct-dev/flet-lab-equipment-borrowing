@@ -1,3 +1,5 @@
+import flet as ft
+
 from app.services.fake_services import FakeInventoryService
 from app.views.history import HistoryView
 
@@ -23,3 +25,33 @@ def test_history_view_search_filters_history() -> None:
     view.asset_search.value = "AST-002"
     view._handle_search(None)
     assert "filtered" in view.feedback.value.lower()
+
+
+def test_history_view_renders_events_as_table() -> None:
+    view = HistoryView(FakeInventoryService())
+
+    table = view.history_container.content.content.controls[0]
+    assert isinstance(table, ft.DataTable)
+    assert len(table.columns) == 7
+    assert table.columns[0].label.value == "วันที่"
+
+
+def test_history_filter_uses_original_multi_row_layout() -> None:
+    view = HistoryView(FakeInventoryService())
+
+    filter_content = view.content.controls[1].content
+    primary_row = filter_content.controls[1]
+    secondary_row = filter_content.controls[2]
+    button_row = filter_content.controls[3]
+
+    assert isinstance(primary_row, ft.ResponsiveRow)
+    assert primary_row.controls[0].content is view.borrower_search
+    assert primary_row.controls[1].content is view.equipment_search
+    assert [container.content for container in secondary_row.controls] == [
+        view.asset_search,
+        view.start_date,
+        view.end_date,
+    ]
+    assert button_row.controls == [view.search_button, view.clear_button]
+    assert view.search_button.content == "ค้นหาประวัติ"
+    assert view.clear_button.content == "ล้างตัวกรอง"

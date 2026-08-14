@@ -1,14 +1,18 @@
 import flet as ft
 
 from app.components.common import (
-    build_card,
+    build_filter_bar,
+    build_form_dialog,
     build_page_header,
     build_state_view,
     build_status_chip,
+    build_table_surface,
+    close_dialog,
+    open_dialog,
     update_control,
 )
 from app.services.fake_services import FakeInventoryService
-from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
+from app.theme import CONTROL_RADIUS
 
 
 class StaffBorrowersView(ft.Container):
@@ -18,20 +22,26 @@ class StaffBorrowersView(ft.Container):
         self.selected_mode = "staff"
 
         self.staff_search = ft.TextField(
-            label="ค้นหาเจ้าหน้าที่",
-            hint_text="รหัส ST-001 หรือชื่อเจ้าหน้าที่",
+            label="ค้นหาผู้บันทึกรายการ",
+            hint_text="รหัส ST-001 หรือชื่อ",
             prefix_icon=ft.Icons.SEARCH,
-            expand=True,
+            width=float("inf"),
+            height=52,
+            border_radius=CONTROL_RADIUS,
+            on_change=self._handle_staff_search,
         )
         self.borrower_search = ft.TextField(
             label="ค้นหาผู้ยืม",
             hint_text="รหัส BR-001 หรือชื่อผู้ยืม",
             prefix_icon=ft.Icons.SEARCH,
-            expand=True,
+            width=float("inf"),
+            height=52,
+            border_radius=CONTROL_RADIUS,
+            on_change=self._handle_borrower_search,
         )
 
-        self.staff_name = ft.TextField(label="ชื่อเต็มเจ้าหน้าที่", hint_text="เช่น Ada Lovelace", expand=True)
-        self.staff_code = ft.TextField(label="รหัสเจ้าหน้าที่", hint_text="เช่น ST-003", expand=True)
+        self.staff_name = ft.TextField(label="ชื่อผู้บันทึกรายการ", hint_text="เช่น สมชาย ใจดี", expand=True)
+        self.staff_code = ft.TextField(label="รหัสผู้บันทึก", hint_text="เช่น ST-003", expand=True)
         self.staff_email = ft.TextField(label="อีเมล", hint_text="ada@example.com", expand=True)
 
         self.borrower_name = ft.TextField(label="ชื่อเต็มผู้ยืม", hint_text="เช่น Lin Chen", expand=True)
@@ -44,8 +54,8 @@ class StaffBorrowersView(ft.Container):
         self.borrower_container = ft.Container(expand=True)
         self.mode_container = ft.Container(expand=True)
 
-        self.btn_staff_tab = ft.ElevatedButton(
-            "เจ้าหน้าที่ (Staff)",
+        self.btn_staff_tab = ft.Button(
+            "ผู้บันทึกรายการ",
             icon=ft.Icons.BADGE,
             style=ft.ButtonStyle(
                 color=ft.Colors.WHITE,
@@ -54,17 +64,48 @@ class StaffBorrowersView(ft.Container):
             on_click=self._switch_to_staff,
         )
         self.btn_borrower_tab = ft.OutlinedButton(
-            "ผู้ยืม (Borrowers)",
+            "ผู้ยืม",
             icon=ft.Icons.PERSON_SEARCH,
             on_click=self._switch_to_borrowers,
+        )
+        self.staff_dialog = build_form_dialog(
+            title="เพิ่มหรือแก้ไขผู้บันทึกรายการ",
+            icon=ft.Icons.BADGE_OUTLINED,
+            content=ft.Column(
+                controls=[self.staff_code, self.staff_name, self.staff_email],
+                spacing=12,
+                tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
+            save_label="บันทึกผู้บันทึก",
+            on_save=self._handle_save_staff,
+            on_cancel=lambda e: close_dialog(self, self.staff_dialog),
+        )
+        self.borrower_dialog = build_form_dialog(
+            title="เพิ่มหรือแก้ไขผู้ยืม",
+            icon=ft.Icons.PERSON_ADD_ALT_1,
+            content=ft.Column(
+                controls=[
+                    self.borrower_code,
+                    self.borrower_name,
+                    self.borrower_department,
+                    self.borrower_email,
+                ],
+                spacing=12,
+                tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
+            save_label="บันทึกผู้ยืม",
+            on_save=self._handle_save_borrower,
+            on_cancel=lambda e: close_dialog(self, self.borrower_dialog),
         )
 
         self._build_view()
 
     def _build_view(self) -> None:
         header = build_page_header(
-            title="จัดการเจ้าหน้าที่ & ผู้ยืม",
-            subtitle="ตรวจสอบ ค้นหา และบันทึกข้อมูลบุคลากรในระบบ",
+            title="คนในระบบ",
+            subtitle="เก็บข้อมูลผู้บันทึกรายการและผู้ยืม",
             icon=ft.Icons.PEOPLE,
         )
 
@@ -92,64 +133,35 @@ class StaffBorrowersView(ft.Container):
         self._render_borrowers()
 
     def _build_staff_tab(self) -> ft.Control:
-        search_card = build_card(
-            content=ft.Column(
-                controls=[
-                    ft.Row(controls=[self.staff_search], spacing=12),
-                    ft.Row(
-                        controls=[
-                            ft.ElevatedButton(
-                                "ค้นหา",
-                                icon=ft.Icons.SEARCH,
-                                style=ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_600),
-                                on_click=self._handle_staff_search,
-                            ),
-                            ft.OutlinedButton(
-                                "รีเซ็ต",
-                                icon=ft.Icons.REFRESH,
-                                on_click=self._handle_staff_reset,
-                            ),
-                        ],
-                        spacing=12,
+        search_card = build_filter_bar(
+            search_control=self.staff_search,
+            action_controls=[
+                ft.Button(
+                    "เพิ่มผู้บันทึกรายการ",
+                    icon=ft.Icons.PERSON_ADD,
+                    height=52,
+                    color=ft.Colors.WHITE,
+                    bgcolor=ft.Colors.BLUE_600,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
                     ),
-                ],
-                spacing=12,
-            ),
-        )
-
-        form_card = build_card(
-            content=ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.PERSON_ADD, size=18, color=ft.Colors.BLUE_600),
-                            ft.Text("เพิ่ม / แก้ไขข้อมูลเจ้าหน้าที่", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
-                        ],
-                        spacing=8,
+                    on_click=self._open_new_staff,
+                ),
+                ft.OutlinedButton(
+                    "รีเซ็ต",
+                    icon=ft.Icons.REFRESH,
+                    height=52,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
                     ),
-                    ft.Row(
-                        controls=[
-                            self.staff_code,
-                            self.staff_name,
-                            self.staff_email,
-                        ],
-                        spacing=12,
-                    ),
-                    ft.ElevatedButton(
-                        "บันทึกเจ้าหน้าที่",
-                        icon=ft.Icons.SAVE,
-                        style=ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.GREEN_600),
-                        on_click=self._handle_save_staff,
-                    ),
-                ],
-                spacing=12,
-            ),
+                    on_click=self._handle_staff_reset,
+                ),
+            ],
         )
 
         return ft.Column(
             controls=[
                 search_card,
-                form_card,
                 self.feedback,
                 self.staff_container,
             ],
@@ -157,70 +169,35 @@ class StaffBorrowersView(ft.Container):
         )
 
     def _build_borrower_tab(self) -> ft.Control:
-        search_card = build_card(
-            content=ft.Column(
-                controls=[
-                    ft.Row(controls=[self.borrower_search], spacing=12),
-                    ft.Row(
-                        controls=[
-                            ft.ElevatedButton(
-                                "ค้นหา",
-                                icon=ft.Icons.SEARCH,
-                                style=ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_600),
-                                on_click=self._handle_borrower_search,
-                            ),
-                            ft.OutlinedButton(
-                                "รีเซ็ต",
-                                icon=ft.Icons.REFRESH,
-                                on_click=self._handle_borrower_reset,
-                            ),
-                        ],
-                        spacing=12,
+        search_card = build_filter_bar(
+            search_control=self.borrower_search,
+            action_controls=[
+                ft.Button(
+                    "เพิ่มผู้ยืม",
+                    icon=ft.Icons.PERSON_ADD_ALT_1,
+                    height=52,
+                    color=ft.Colors.WHITE,
+                    bgcolor=ft.Colors.BLUE_600,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
                     ),
-                ],
-                spacing=12,
-            ),
-        )
-
-        form_card = build_card(
-            content=ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.PERSON_ADD_ALT_1, size=18, color=ft.Colors.BLUE_600),
-                            ft.Text("เพิ่ม / แก้ไขข้อมูลผู้ยืม", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
-                        ],
-                        spacing=8,
+                    on_click=self._open_new_borrower,
+                ),
+                ft.OutlinedButton(
+                    "รีเซ็ต",
+                    icon=ft.Icons.REFRESH,
+                    height=52,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
                     ),
-                    ft.Row(
-                        controls=[
-                            self.borrower_code,
-                            self.borrower_name,
-                        ],
-                        spacing=12,
-                    ),
-                    ft.Row(
-                        controls=[
-                            self.borrower_department,
-                            self.borrower_email,
-                        ],
-                        spacing=12,
-                    ),
-                    ft.ElevatedButton(
-                        "บันทึกผู้ยืม",
-                        icon=ft.Icons.SAVE,
-                        style=ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.GREEN_600),
-                        on_click=self._handle_save_borrower,
-                    ),
-                ],
-                spacing=12,
-            ),
+                    on_click=self._handle_borrower_reset,
+                ),
+            ],
         )
 
         return ft.Column(
             controls=[
                 search_card,
-                form_card,
                 self.feedback,
                 self.borrower_container,
             ],
@@ -253,6 +230,19 @@ class StaffBorrowersView(ft.Container):
         self._refresh_mode_content()
         update_control(self)
 
+    def _open_new_staff(self, e: ft.ControlEvent | None) -> None:
+        self.staff_code.value = ""
+        self.staff_name.value = ""
+        self.staff_email.value = ""
+        open_dialog(self, self.staff_dialog)
+
+    def _open_new_borrower(self, e: ft.ControlEvent | None) -> None:
+        self.borrower_code.value = ""
+        self.borrower_name.value = ""
+        self.borrower_department.value = ""
+        self.borrower_email.value = ""
+        open_dialog(self, self.borrower_dialog)
+
     def _render_staff(self) -> None:
         keyword = (self.staff_search.value or "").strip().lower()
         staff = self.service.list_staff(include_inactive=True)
@@ -260,67 +250,47 @@ class StaffBorrowersView(ft.Container):
             staff = [item for item in staff if keyword in item.full_name.lower() or keyword in item.staff_code.lower()]
 
         if not staff:
-            self.staff_container.content = build_state_view("ไม่มีเจ้าหน้าที่", "ไม่มีข้อมูลเจ้าหน้าที่ที่ตรงกับการค้นหานี้", icon=ft.Icons.PEOPLE_OUTLINED)
+            self.staff_container.content = build_state_view("ยังไม่มีผู้บันทึกรายการ", "เพิ่มชื่อของคุณก่อนทำรายการยืม", icon=ft.Icons.PEOPLE_OUTLINED)
             return
 
-        cards = []
-        for item in staff:
-            avatar = ft.CircleAvatar(
-                content=ft.Icon(ft.Icons.BADGE, size=18, color=ft.Colors.BLUE_700),
-                bgcolor=ft.Colors.BLUE_50,
-                radius=18,
-            )
-            card_content = ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            avatar,
-                            ft.Column(
-                                controls=[
-                                    ft.Text(item.full_name, weight=ft.FontWeight.BOLD, size=14, color=COLOR_TEXT_PRIMARY),
-                                    ft.Text(item.staff_code, size=12, color=COLOR_TEXT_SECONDARY),
-                                ],
-                                spacing=1,
-                                tight=True,
-                                expand=True,
-                            ),
-                        ],
-                        spacing=10,
-                    ),
-                    ft.Divider(height=8, color=ft.Colors.GREY_200),
-                    ft.Row(
-                        controls=[
-                            build_status_chip(item.status, self._translate_status(item.status)),
-                        ],
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.EMAIL_OUTLINED, size=14, color=COLOR_TEXT_SECONDARY),
-                            ft.Text(item.email or "ไม่มีอีเมล", size=12, color=COLOR_TEXT_SECONDARY, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
-                        ],
-                        spacing=4,
-                    ),
-                ],
-                spacing=6,
-                tight=True,
-            )
-            card = build_card(
-                content=card_content,
-                padding=12,
-                width=240,
-                on_click=lambda e, code=item.staff_code, name=item.full_name, email=item.email: self._select_staff(code, name, email),
-            )
-            cards.append(card)
-
-        self.staff_container.content = ft.Row(controls=cards, wrap=True, spacing=12, run_spacing=12)
+        table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("รหัสผู้บันทึก"), expand=2),
+                ft.DataColumn(ft.Text("ชื่อ"), expand=3),
+                ft.DataColumn(ft.Text("อีเมล"), expand=3),
+                ft.DataColumn(ft.Text("สถานะ"), expand=2),
+                ft.DataColumn(ft.Text("จัดการ"), expand=1),
+            ],
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(item.staff_code, weight=ft.FontWeight.W_600)),
+                        ft.DataCell(ft.Text(item.full_name)),
+                        ft.DataCell(ft.Text(item.email or "ไม่มีอีเมล")),
+                        ft.DataCell(build_status_chip(item.status, self._translate_status(item.status))),
+                        ft.DataCell(
+                            ft.IconButton(
+                                icon=ft.Icons.EDIT_OUTLINED,
+                                tooltip="แก้ไขผู้บันทึกรายการ",
+                                on_click=lambda e, code=item.staff_code, name=item.full_name, email=item.email: self._select_staff(code, name, email),
+                            )
+                        ),
+                    ]
+                )
+                for item in staff
+            ],
+            column_spacing=28,
+            horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
+        )
+        self.staff_container.content = build_table_surface(table)
 
     def _select_staff(self, code: str, name: str, email: str | None) -> None:
         self.staff_code.value = code
         self.staff_name.value = name
         self.staff_email.value = email or ""
-        self.feedback.value = f"เลือกเจ้าหน้าที่ {code} แล้ว"
+        self.feedback.value = f"เลือกผู้บันทึก {code} แล้ว"
         self.feedback.color = ft.Colors.BLUE_700
-        update_control(self)
+        open_dialog(self, self.staff_dialog)
 
     def _render_borrowers(self) -> None:
         keyword = (self.borrower_search.value or "").strip().lower()
@@ -332,56 +302,38 @@ class StaffBorrowersView(ft.Container):
             self.borrower_container.content = build_state_view("ไม่มีผู้ยืม", "ไม่มีข้อมูลผู้ยืมที่ตรงกับการค้นหานี้", icon=ft.Icons.PERSON_OUTLINED)
             return
 
-        cards = []
-        for item in borrowers:
-            avatar = ft.CircleAvatar(
-                content=ft.Icon(ft.Icons.PERSON_OUTLINE, size=18, color=ft.Colors.GREEN_700),
-                bgcolor=ft.Colors.GREEN_50,
-                radius=18,
-            )
-            card_content = ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            avatar,
-                            ft.Column(
-                                controls=[
-                                    ft.Text(item.full_name, weight=ft.FontWeight.BOLD, size=14, color=COLOR_TEXT_PRIMARY),
-                                    ft.Text(item.borrower_code, size=12, color=COLOR_TEXT_SECONDARY),
-                                ],
-                                spacing=1,
-                                tight=True,
-                                expand=True,
-                            ),
-                        ],
-                        spacing=10,
-                    ),
-                    ft.Divider(height=8, color=ft.Colors.GREY_200),
-                    ft.Row(
-                        controls=[
-                            build_status_chip(item.status, self._translate_status(item.status)),
-                        ],
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.BUSINESS_OUTLINED, size=14, color=COLOR_TEXT_SECONDARY),
-                            ft.Text(item.department or "ไม่มีหน่วยงาน", size=12, color=COLOR_TEXT_SECONDARY, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
-                        ],
-                        spacing=4,
-                    ),
-                ],
-                spacing=6,
-                tight=True,
-            )
-            card = build_card(
-                content=card_content,
-                padding=12,
-                width=240,
-                on_click=lambda e, code=item.borrower_code, name=item.full_name, dept=item.department, email=item.email: self._select_borrower(code, name, dept, email),
-            )
-            cards.append(card)
-
-        self.borrower_container.content = ft.Row(controls=cards, wrap=True, spacing=12, run_spacing=12)
+        table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("รหัสผู้ยืม"), expand=2),
+                ft.DataColumn(ft.Text("ชื่อ"), expand=3),
+                ft.DataColumn(ft.Text("หน่วยงาน"), expand=3),
+                ft.DataColumn(ft.Text("อีเมล"), expand=3),
+                ft.DataColumn(ft.Text("สถานะ"), expand=2),
+                ft.DataColumn(ft.Text("จัดการ"), expand=1),
+            ],
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(item.borrower_code, weight=ft.FontWeight.W_600)),
+                        ft.DataCell(ft.Text(item.full_name)),
+                        ft.DataCell(ft.Text(item.department or "ไม่มีหน่วยงาน")),
+                        ft.DataCell(ft.Text(item.email or "ไม่มีอีเมล")),
+                        ft.DataCell(build_status_chip(item.status, self._translate_status(item.status))),
+                        ft.DataCell(
+                            ft.IconButton(
+                                icon=ft.Icons.EDIT_OUTLINED,
+                                tooltip="แก้ไขผู้ยืม",
+                                on_click=lambda e, code=item.borrower_code, name=item.full_name, dept=item.department, email=item.email: self._select_borrower(code, name, dept, email),
+                            )
+                        ),
+                    ]
+                )
+                for item in borrowers
+            ],
+            column_spacing=24,
+            horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
+        )
+        self.borrower_container.content = build_table_surface(table, table_width=1150)
 
     def _select_borrower(self, code: str, name: str, dept: str | None, email: str | None) -> None:
         self.borrower_code.value = code
@@ -390,7 +342,7 @@ class StaffBorrowersView(ft.Container):
         self.borrower_email.value = email or ""
         self.feedback.value = f"เลือกผู้ยืม {code} แล้ว"
         self.feedback.color = ft.Colors.BLUE_700
-        update_control(self)
+        open_dialog(self, self.borrower_dialog)
 
     def _handle_staff_search(self, e: ft.ControlEvent) -> None:
         self._render_staff()
@@ -411,21 +363,27 @@ class StaffBorrowersView(ft.Container):
         name = (self.staff_name.value or "").strip()
         email = (self.staff_email.value or "").strip() or None
         if not code or not name:
-            self.feedback.value = "กรุณาใส่รหัสเจ้าหน้าที่และชื่อ"
+            self.feedback.value = "กรุณาใส่รหัสและชื่อผู้บันทึก"
             self.feedback.color = ft.Colors.RED_700
             update_control(self)
             return
         existing = self.service.get_staff(code)
         if existing is None:
-            self.service.create_staff(code, name, email=email)
+            saved = self.service.create_staff(code, name, email=email)
         else:
-            self.service.update_staff(code, full_name=name, email=email)
-        self.feedback.value = f"บันทึกเจ้าหน้าที่ {code} แล้ว"
+            saved = self.service.update_staff(code, full_name=name, email=email)
+        if saved is None:
+            self.feedback.value = "บันทึกผู้บันทึกไม่สำเร็จ กรุณาตรวจสอบรหัสหรือข้อมูลซ้ำ"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+        self.feedback.value = f"บันทึกผู้บันทึก {code} แล้ว"
         self.feedback.color = ft.Colors.GREEN_700
         self.staff_code.value = ""
         self.staff_name.value = ""
         self.staff_email.value = ""
         self._render_staff()
+        close_dialog(self, self.staff_dialog)
         update_control(self)
 
     def _handle_save_borrower(self, e: ft.ControlEvent) -> None:
@@ -440,9 +398,14 @@ class StaffBorrowersView(ft.Container):
             return
         existing = self.service.get_borrower(code)
         if existing is None:
-            self.service.create_borrower(code, name, department=department, email=email)
+            saved = self.service.create_borrower(code, name, department=department, email=email)
         else:
-            self.service.update_borrower(code, full_name=name, department=department, email=email)
+            saved = self.service.update_borrower(code, full_name=name, department=department, email=email)
+        if saved is None:
+            self.feedback.value = "บันทึกผู้ยืมไม่สำเร็จ กรุณาตรวจสอบรหัสหรือข้อมูลซ้ำ"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
         self.feedback.value = f"บันทึกผู้ยืม {code} แล้ว"
         self.feedback.color = ft.Colors.GREEN_700
         self.borrower_code.value = ""
@@ -450,4 +413,5 @@ class StaffBorrowersView(ft.Container):
         self.borrower_department.value = ""
         self.borrower_email.value = ""
         self._render_borrowers()
+        close_dialog(self, self.borrower_dialog)
         update_control(self)

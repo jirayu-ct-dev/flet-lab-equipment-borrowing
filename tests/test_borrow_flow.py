@@ -1,4 +1,28 @@
+from datetime import timedelta
+
 from app.services.fake_services import FakeInventoryService
+from app.database import bangkok_today
+from app.views.borrow_flow import BorrowFlowView
+
+
+def test_borrow_flow_defaults_to_three_day_due_date() -> None:
+    view = BorrowFlowView(FakeInventoryService())
+
+    assert view.due_date.value == (bangkok_today() + timedelta(days=3)).isoformat()
+
+
+def test_borrow_flow_saves_and_confirms_in_one_action() -> None:
+    service = FakeInventoryService()
+    view = BorrowFlowView(service)
+    view.borrower_dropdown.value = "BR-001"
+    view.staff_dropdown.value = "ST-001"
+    view.unit_dropdown.value = "unit-1"
+    view.purpose.value = "ใช้ทดลอง"
+
+    view._handle_borrow(None)
+
+    assert service.get_unit_by_id("unit-1").status == "borrowed"
+    assert "บันทึกการยืมเรียบร้อย" in view.summary.value
 
 
 def test_borrow_flow_can_create_draft_and_confirm() -> None:

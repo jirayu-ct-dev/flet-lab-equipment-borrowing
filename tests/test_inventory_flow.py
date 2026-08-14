@@ -1,5 +1,5 @@
 from app.services.fake_services import FakeInventoryService
-from app.views.inventory import InventoryView
+from app.views.dashboard import DashboardView
 
 
 def test_search_units_supports_status_filter() -> None:
@@ -49,13 +49,15 @@ def test_complete_repair_requires_maintenance_unit() -> None:
 
 def test_inventory_view_creates_unit_for_selected_equipment() -> None:
     service = FakeInventoryService()
-    view = InventoryView(service)
-    view.equipment_dropdown.value = "eq-2"
-    view.asset_code_field.value = "AST-009"
-    view.location_field.value = "Lab D"
+    view = DashboardView(service)
+    view.equipment_name.value = "จอคอม"
+    view.equipment_category.value = "category-1"
+    view.equipment_asset_code.value = "AST-009"
+    view.equipment_location.value = "Lab D"
 
-    view._handle_create_unit(None)
+    view._save_equipment(None)
 
     created = service.get_unit("AST-009")
     assert created is not None
-    assert created.equipment_name == "Microscope"
+    assert created.equipment_name == "จอคอม"
+    assert created.category == "IT"

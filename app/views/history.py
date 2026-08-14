@@ -5,6 +5,7 @@ from app.components.common import (
     build_page_header,
     build_state_view,
     build_status_chip,
+    build_table_surface,
     update_control,
 )
 from app.services.fake_services import FakeInventoryService
@@ -66,7 +67,7 @@ class HistoryView(ft.Container):
         # Buttons
         # --------------------------------------------------
 
-        self.search_button = ft.ElevatedButton(
+        self.search_button = ft.Button(
             "ค้นหาประวัติ",
             icon=ft.Icons.SEARCH,
             style=ft.ButtonStyle(
@@ -109,8 +110,8 @@ class HistoryView(ft.Container):
 
     def _build_view(self) -> None:
         header = build_page_header(
-            title="ประวัติการใช้งานระบบ",
-            subtitle="ติดตามเหตุการณ์ยืม คืน ซ่อมบำรุง สูญหาย และการเปลี่ยนแปลงของอุปกรณ์",
+            title="ประวัติ",
+            subtitle="ดูว่าอุปกรณ์ถูกเพิ่ม ยืม คืน หรือเปลี่ยนสถานะเมื่อใด",
             icon=ft.Icons.HISTORY,
         )
 
@@ -119,8 +120,17 @@ class HistoryView(ft.Container):
                 controls=[
                     ft.Row(
                         controls=[
-                            ft.Icon(ft.Icons.FILTER_ALT, size=18, color=ft.Colors.BLUE_600),
-                            ft.Text("ค้นหาประวัติและกรองข้อมูล", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
+                            ft.Icon(
+                                ft.Icons.FILTER_ALT,
+                                size=18,
+                                color=ft.Colors.BLUE_600,
+                            ),
+                            ft.Text(
+                                "ค้นหาประวัติและกรองข้อมูล",
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
+                                color=COLOR_TEXT_PRIMARY,
+                            ),
                         ],
                         spacing=8,
                     ),
@@ -153,10 +163,7 @@ class HistoryView(ft.Container):
                         ],
                     ),
                     ft.Row(
-                        controls=[
-                            self.search_button,
-                            self.clear_button,
-                        ],
+                        controls=[self.search_button, self.clear_button],
                         spacing=12,
                     ),
                 ],
@@ -220,127 +227,39 @@ class HistoryView(ft.Container):
             )
             return
 
-        rows = []
-
-        for event in events:
-            rows.append(
-                self._build_history_card(event)
-            )
-
-        self.history_container.content = ft.Column(
-            controls=rows,
-            spacing=10,
-            scroll=ft.ScrollMode.AUTO,
-        )
-
-    # ======================================================
-    # HISTORY CARD
-    # ======================================================
-
-    def _build_history_card(self, event) -> ft.Control:
-        event_type = getattr(event, "event_type", "")
-        event_date = getattr(event, "event_date", "")
-        description = getattr(event, "description", "")
-        borrower_code = getattr(event, "borrower_code", "")
-        staff_code = getattr(event, "staff_code", "")
-        equipment_name = getattr(event, "equipment_name", "")
-        asset_code = getattr(event, "asset_code", "")
-        unit_id = getattr(event, "unit_id", "")
-
-        event_config = {
-            "borrowed": {"icon": ft.Icons.CALL_MADE, "color": ft.Colors.BLUE_700, "bg": ft.Colors.BLUE_50},
-            "returned": {"icon": ft.Icons.CALL_RECEIVED, "color": ft.Colors.GREEN_700, "bg": ft.Colors.GREEN_50},
-            "available": {"icon": ft.Icons.CHECK_CIRCLE, "color": ft.Colors.GREEN_700, "bg": ft.Colors.GREEN_50},
-            "maintenance": {"icon": ft.Icons.BUILD, "color": ft.Colors.AMBER_800, "bg": ft.Colors.AMBER_50},
-            "reported_lost": {"icon": ft.Icons.REPORT_PROBLEM, "color": ft.Colors.RED_700, "bg": ft.Colors.RED_50},
-            "retired": {"icon": ft.Icons.DELETE_SWEEP, "color": ft.Colors.GREY_700, "bg": ft.Colors.GREY_100},
-            "acquire": {"icon": ft.Icons.ADD_BOX, "color": ft.Colors.GREEN_700, "bg": ft.Colors.GREEN_50},
-            "relocate": {"icon": ft.Icons.MOVE_DOWN, "color": ft.Colors.BLUE_700, "bg": ft.Colors.BLUE_50},
-            "repair_complete": {"icon": ft.Icons.HANDYMAN, "color": ft.Colors.GREEN_700, "bg": ft.Colors.GREEN_50},
-            "lost_resolved": {"icon": ft.Icons.FACT_CHECK, "color": ft.Colors.PURPLE_700, "bg": ft.Colors.PURPLE_50},
-        }.get(event_type, {"icon": ft.Icons.HISTORY, "color": ft.Colors.BLUE_700, "bg": ft.Colors.BLUE_50})
-
-        details = " • ".join(
-            part
-            for part in [
-                self._translate_event_type(event_type),
-                f"ผู้ยืม: {borrower_code}" if borrower_code else "",
-                f"เจ้าหน้าที่: {staff_code}" if staff_code else "",
-                equipment_name,
-                asset_code,
-                unit_id,
-            ]
-            if part
-        )
-
-        card_content = ft.Row(
-            controls=[
-                ft.Container(
-                    width=42,
-                    height=42,
-                    alignment=ft.Alignment.CENTER,
-                    border_radius=21,
-                    bgcolor=event_config["bg"],
-                    content=ft.Icon(
-                        event_config["icon"],
-                        color=event_config["color"],
-                        size=20,
-                    ),
-                ),
-                ft.Column(
-                    controls=[
-                        ft.Row(
-                            controls=[
-                                ft.Text(
-                                    self._translate_event_type(event_type),
-                                    size=14,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=COLOR_TEXT_PRIMARY,
-                                ),
-                                build_status_chip(event_type, self._translate_event_type(event_type)),
-                            ],
-                            spacing=8,
-                        ),
-                        ft.Text(
-                            description or "-",
-                            size=13,
-                            color=COLOR_TEXT_PRIMARY,
-                        ),
-                        ft.Text(
-                            details or "-",
-                            size=12,
-                            color=COLOR_TEXT_SECONDARY,
-                        ),
-                    ],
-                    spacing=4,
-                    expand=True,
-                ),
-                ft.Container(
-                    content=ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.SCHEDULE, size=14, color=COLOR_TEXT_SECONDARY),
-                            ft.Text(
-                                event_date or "-",
-                                size=12,
-                                color=COLOR_TEXT_SECONDARY,
-                                weight=ft.FontWeight.W_500,
-                            ),
-                        ],
-                        spacing=4,
-                    ),
-                    padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-                    bgcolor=ft.Colors.GREY_100,
-                    border_radius=6,
-                ),
+        table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("วันที่"), expand=2),
+                ft.DataColumn(ft.Text("เหตุการณ์"), expand=2),
+                ft.DataColumn(ft.Text("รายละเอียด"), expand=4),
+                ft.DataColumn(ft.Text("ผู้ยืม"), expand=2),
+                ft.DataColumn(ft.Text("ผู้บันทึก"), expand=2),
+                ft.DataColumn(ft.Text("อุปกรณ์"), expand=2),
+                ft.DataColumn(ft.Text("รหัสอุปกรณ์"), expand=2),
             ],
-            spacing=14,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(getattr(event, "event_date", "") or "-")),
+                        ft.DataCell(
+                            build_status_chip(
+                                getattr(event, "event_type", ""),
+                                self._translate_event_type(getattr(event, "event_type", "")),
+                            )
+                        ),
+                        ft.DataCell(ft.Text(getattr(event, "description", "") or "-")),
+                        ft.DataCell(ft.Text(getattr(event, "borrower_code", "") or "-")),
+                        ft.DataCell(ft.Text(getattr(event, "staff_code", "") or "-")),
+                        ft.DataCell(ft.Text(getattr(event, "equipment_name", "") or "-")),
+                        ft.DataCell(ft.Text(getattr(event, "asset_code", "") or "-")),
+                    ]
+                )
+                for event in events
+            ],
+            column_spacing=24,
+            horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
-
-        return build_card(
-            content=card_content,
-            padding=14,
-        )
+        self.history_container.content = build_table_surface(table, table_width=1250)
 
     # ======================================================
     # TRANSLATE EVENT
@@ -357,7 +276,7 @@ class HistoryView(ft.Container):
             "maintenance": "ส่งซ่อมบำรุง",
             "reported_lost": "แจ้งหาย",
             "inventory_added": "เพิ่มเข้าคลัง",
-            "closed": "ปิดสัญญายืม",
+            "closed": "คืนครบแล้ว",
             "partial": "คืนบางส่วน",
             "returned": "คืนอุปกรณ์",
             "relocated": "ย้ายตำแหน่ง",

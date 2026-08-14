@@ -1,131 +1,58 @@
-# Frontend Scope
+# งาน Frontend สำหรับ Mini Project
 
 ## เป้าหมาย
 
-สร้าง Flet Web UI สำหรับเจ้าหน้าที่ให้ทำงานตาม user flow ได้ครบ โดยเรียก domain services
-ผ่าน contract กลางและไม่เข้าถึง SQLite โดยตรง
+ทำหน้าจอ Flet ให้ผู้ดูแลทำงานหลักได้โดยไม่ต้องรู้คำศัพท์ทางเทคนิค
 
-## Ownership
+## งานที่ต้องทำ
 
-Frontend เป็น owner ของ:
+### Dashboard
 
-```text
-main.py
-app/views/
-app/components/
-app/theme.py
-tests/ui/
-```
+- แสดงจำนวนอุปกรณ์แยกตามสถานะ
+- มีปุ่มจัดการคลัง 3 ปุ่มที่มุมขวาบน: เพิ่มหมวดหมู่, เพิ่มอุปกรณ์ และเปลี่ยนสถานะหรือตำแหน่ง
+- ฟอร์มเพิ่มอุปกรณ์เลือกหมวดหมู่ที่สร้างไว้จาก Dropdown
+- ทุกปุ่มเปิดฟอร์มใน dialog และเก็บข้อมูลที่กรอกไว้เมื่อบันทึกไม่สำเร็จ
+- แสดงตารางรหัส ชื่อ หมวดหมู่ สถานะ และตำแหน่งของอุปกรณ์ทุกชิ้น
 
-Frontend ร่วม review `app/models.py` หรือ `app/contracts.py` แต่ไม่เขียน SQL ใน view
-และไม่แก้ database schema โดยไม่ผ่าน Backend review
+### 1. อุปกรณ์
 
-## งานตามลำดับ
+- แสดงรายการแบบตาราง พร้อมค้นหาและตัวกรองสถานะ
+- ใช้สำหรับค้นหาและตรวจสถานะเท่านั้น
 
-### FE-01 — App shell และ design foundation
+### 2. คนในระบบ
 
-- Navigation สำหรับ Inventory, Staff, Borrowers, Loans และ History
-- theme, spacing, typography และ responsive content area
-- reusable loading, empty, error และ confirmation states
-- current staff selector สำหรับ MVP ที่ยังไม่มี login
+- แสดงผู้บันทึกรายการและผู้ยืมแบบตาราง
+- เพิ่มและค้นหาผู้บันทึกรายการ โดยเปิดฟอร์มเพิ่มหรือแก้ไขใน dialog
+- เพิ่มและค้นหาผู้ยืม โดยเปิดฟอร์มเพิ่มหรือแก้ไขใน dialog
 
-**Acceptance:** navigation ใช้ได้ทั้งจอกว้างและแคบ และทุกหน้ามี loading/empty/error state
+### 3. ยืมและคืน
 
-### FE-02 — Fake services
+- เลือกข้อมูลจากรายการที่มีอยู่จริง
+- แสดงรายการยืมที่รอคืนแบบตาราง
+- บันทึกการยืมด้วยปุ่มเดียวและแสดงผลหลังบันทึก
+- เลือกคืนทั้งหมดหรือบางส่วน
+- ปรับฟอร์มให้เรียงแนวตั้งบนมือถือ
 
-- implement fake services ตาม Backend contract
-- เตรียม fixture สำหรับ available, borrowed, maintenance, lost และ retired units
-- ห้ามสร้าง model ซ้ำใน views
+### 4. ประวัติ
 
-**Acceptance:** หน้าจอพัฒนาและ demo ได้ก่อน SQLite services เสร็จ และสลับ implementation ได้จาก composition root
+- แสดงเหตุการณ์แบบตาราง เรียงจากใหม่ไปเก่า
+- ตัวกรองต้องค้นข้อมูลได้จริง
 
-### FE-03 — Inventory screens
+## ไม่ต้องทำ
 
-- รายการ/ค้นหา equipment types และ units
-- เพิ่ม/แก้ equipment type
-- เพิ่ม unit พร้อม asset code, serial, ราคา และตำแหน่ง
-- relocate, retire และ repair-complete actions พร้อมเหตุผล
+- Login และสิทธิ์ผู้ใช้
+- Dashboard และกราฟ
+- หน้าชดใช้ของสูญหาย
+- QR scanner, notification และ export report
+- animation หรือ component library เพิ่มเติม
 
-**Acceptance:** แสดงสถานะและตำแหน่งล่าสุดชัดเจน และ validation errors ผูกกับ field ที่เกี่ยวข้อง
+## เสร็จเมื่อ
 
-### FE-04 — Staff และ Borrower screens
+- Dashboard และเมนูงานหลัก 5 หน้าทำงานครบ
+- ไม่มีปุ่มที่กดแล้วไม่เกิดผล
+- ข้อความใช้ภาษาไทยที่เข้าใจง่าย
+- ใช้งานได้ที่ความกว้าง desktop และ mobile
+- UI tests ผ่าน
 
-- เพิ่ม แก้ ค้นหา และ inactive records
-- ไม่แสดง inactive staff ใน selector สำหรับรายการใหม่
-- ยังค้นเจอ inactive records ใน history
-
-**Acceptance:** forms ป้องกัน submit ซ้ำและแสดง duplicate code error
-
-### FE-05 — Borrow flow
-
-- เลือก borrower, staff และ available units
-- ระบุ borrow/due dates, purpose และ note
-- review summary ก่อน confirm
-- แสดง stale/not-available error โดยไม่ทำข้อมูลใน form หาย
-
-**Acceptance:** ยืนยัน loan หลาย unit ได้และ refresh แล้วเห็น units เป็น borrowed
-
-### FE-06 — Active loans และ return flow
-
-- filter due today, due soon, overdue และ partial
-- เลือกคืนบาง unit
-- ระบุ outcome/condition ต่อ unit
-- confirmation และผลลัพธ์หลังบันทึก
-
-**Acceptance:** คืนบางส่วนหลายครั้งได้ และ maintenance/lost ไม่แสดงเป็น available
-
-### FE-07 — Lost resolution และ edits
-
-- lost case detail พร้อม assessed/approved value
-- recovered, replaced, compensated และ waived forms
-- due date/purpose/note edit พร้อม required reason
-- แสดง audit timeline แบบ read-only
-
-**Acceptance:** UI ไม่อนุญาต resolve โดยข้อมูลผู้อนุมัติไม่ครบ และแสดงประวัติการแก้ไขได้
-
-### FE-08 — History และ usability
-
-- ค้นหาจาก borrower, equipment, asset code และช่วงวันที่
-- แสดง loan, return events, lost resolution และ audit entries ตามลำดับเวลา
-- responsive และ keyboard-friendly forms
-
-**Acceptance:** ผู้ใช้ตามรอย unit หนึ่งชิ้นตั้งแต่รับเข้า ยืม คืน/สูญหาย จนปิดรายการได้
-
-## Contract usage rules
-
-This section defines how frontend views should use service contracts and avoid direct database or repository access.
-
-- View รับ services ผ่าน constructor/composition root
-- View ไม่ import repository, connection หรือ `sqlite3`
-- Domain errors ถูก map เป็นข้อความผู้ใช้ในชั้น UI
-- ห้ามคำนวณ overdue จากเวลา browser; ใช้ค่าที่ query service ส่งมา
-- ห้ามแก้ model fields โดยตรงแล้วถือว่าบันทึกสำเร็จ ต้องเรียก command method
-
-## Test requirements
-
-This section defines the required frontend test coverage for the MVP and acceptance criteria.
-
-- unit test สำหรับ state/validation ที่สำคัญ
-- UI smoke tests สำหรับ navigation และ forms หลัก
-- manual responsive check อย่างน้อย desktop และ mobile width
-- integration demo ใช้ SQLite service ก่อน merge milestone
-
-## ไม่อยู่ในขอบเขต Frontend MVP
-
-หัวข้อนี้บอกงานที่ไม่รวมอยู่ในขอบเขต Frontend MVP เพื่อให้ทีมทำเฉพาะ workflow หลักและไม่ใส่ฟีเจอร์รอง
-
-- Login/permissions UI
-- Dashboard analytics
-- QR scanner, notification, reports และ GPS
-- custom design system ขนาดใหญ่หรือ animation ที่ไม่ช่วย workflow
-
-## Definition of Done
-
-This section defines the final completion criteria for the frontend scope.
-
-- ตรง acceptance criteria และใช้ service contract
-- ไม่มี SQL/database import ใน views
-- loading, empty, success และ error states ครบ
-- ป้องกัน double submit
-- responsive check ผ่าน
-- tests ผ่านและ PR ได้ Backend review เมื่อ contract usage เปลี่ยน
+ข้อมูลสถานะ `แจ้งหาย` จากฐานข้อมูลเวอร์ชันก่อนจัดการแบบย่อในหน้าอุปกรณ์เท่านั้น
+โดยเลือก “พบอุปกรณ์ที่เคยแจ้งหาย” หรือ “ปิดข้อมูลแจ้งหายเดิม”

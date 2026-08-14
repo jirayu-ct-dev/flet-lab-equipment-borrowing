@@ -1,3 +1,4 @@
+from app.database import connection
 from app.services.sqlite_adapter import SQLiteInventoryAdapter
 
 
@@ -20,7 +21,7 @@ def test_adapter_persists_inventory_and_loan_flow(tmp_path) -> None:
     )
     assert unit is not None
 
-    draft = service.create_borrow_draft(
+    draft = service.create_and_confirm_borrow(
         borrower_code=borrower.borrower_code,
         staff_code=staff.staff_code,
         unit_ids=[unit.id],
@@ -29,7 +30,6 @@ def test_adapter_persists_inventory_and_loan_flow(tmp_path) -> None:
         purpose="Lab work",
     )
     assert draft is not None
-    assert service.confirm_borrow_draft(draft.id) is not None
     assert service.get_unit_by_id(unit.id).status == "borrowed"
 
     location = service.list_locations()[0]
@@ -55,6 +55,34 @@ def test_adapter_persists_inventory_and_loan_flow(tmp_path) -> None:
     assert restarted.list_loans()[0].status == "closed"
 
 
+def test_adapter_persists_categories_and_creates_equipment_from_category(tmp_path) -> None:
+    database_path = tmp_path / "categories.db"
+    service = SQLiteInventoryAdapter(database_path)
+
+    category = service.create_category("IT")
+    assert category is not None
+    assert service.create_category("it") is None
+
+    unit = service.create_inventory_item(
+        name="จอคอม",
+        category_id=category.id,
+        asset_code="MON-001",
+        location="Lab A",
+    )
+
+    assert unit is not None
+    assert unit.equipment_name == "จอคอม"
+    assert unit.category == "IT"
+    with connection(database_path) as database:
+        stored_category_id = database.execute(
+            "SELECT category_id FROM equipment WHERE equipment_code = 'MON-001'"
+        ).fetchone()["category_id"]
+    assert stored_category_id == int(category.id)
+    restarted = SQLiteInventoryAdapter(database_path)
+    assert restarted.list_categories() == [category]
+    assert restarted.get_unit_by_asset_code("MON-001") is not None
+
+
 def test_adapter_uses_inventory_adjustment_services(tmp_path) -> None:
     service = SQLiteInventoryAdapter(tmp_path / "adjustments.db")
     equipment = service.create_equipment("Camera", "EQ-002", "Media")
@@ -76,7 +104,7 @@ def test_adapter_uses_inventory_adjustment_services(tmp_path) -> None:
     assert {event.event_type for event in history} >= {"acquire", "relocate", "retire"}
 
 
-def test_adapter_lists_and_resolves_lost_case(tmp_path) -> None:
+def test_adapter_recovers_legacy_lost_case_from_inventory(tmp_path) -> None:
     service = SQLiteInventoryAdapter(tmp_path / "lost-case.db")
     equipment = service.create_equipment("Camera", "EQ-003", "Media")
     staff = service.create_staff("ST-003", "Approver")
@@ -84,7 +112,7 @@ def test_adapter_lists_and_resolves_lost_case(tmp_path) -> None:
     assert equipment and staff and borrower
     unit = service.create_unit(asset_code="CAM-LOST", equipment_id=equipment.id, location="Studio")
     assert unit is not None
-    draft = service.create_borrow_draft(
+    draft = service.create_and_confirm_borrow(
         borrower_code=borrower.borrower_code,
         staff_code=staff.staff_code,
         unit_ids=[unit.id],
@@ -93,7 +121,6 @@ def test_adapter_lists_and_resolves_lost_case(tmp_path) -> None:
         purpose="Field work",
     )
     assert draft is not None
-    assert service.confirm_borrow_draft(draft.id) is not None
     assert service.return_loan_units(
         draft.id,
         [unit.id],
@@ -101,21 +128,18 @@ def test_adapter_lists_and_resolves_lost_case(tmp_path) -> None:
         staff_code=staff.staff_code,
     ) is not None
 
-    open_case = service.list_lost_cases(status="open")[0]
-    assert open_case.asset_code == "CAM-LOST"
-    resolved = service.resolve_lost_case(
-        open_case.id,
-        resolution="compensated",
-        assessed_value="25000",
-        approved_compensation="20000",
-        staff_code=staff.staff_code,
-        reason="Approved compensation",
+    assert service.list_lost_cases(status="open")[0].asset_code == "CAM-LOST"
+    recovered = service.update_unit_status(
+        unit.id,
+        "lost_recovered",
+        location="Recovered shelf",
+        reason="Found in storage",
     )
 
-    assert resolved is not None
-    assert resolved.resolution == "compensated"
+    assert recovered is not None
+    assert recovered.status == "available"
+    assert recovered.location == "Recovered shelf"
     assert service.list_lost_cases(status="open") == []
-    assert service.get_unit_by_id(unit.id).status == "retired"
     assert "lost_resolved" in {
         event.event_type for event in service.list_history(asset_code="CAM-LOST")
     }

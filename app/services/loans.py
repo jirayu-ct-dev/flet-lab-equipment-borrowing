@@ -41,33 +41,35 @@ class SQLiteLoanService:
                 raise
 
     def create_draft(self, command: CreateDraftLoan) -> Loan:
-        transaction_code = command.transaction_code.strip()
-        if not transaction_code:
-            raise ValidationError(
-                "transaction_code is required", field="transaction_code"
-            )
-        if command.due_date < command.borrow_date:
-            raise ValidationError(
-                "due_date must not be before borrow_date", field="due_date"
-            )
-        if not command.unit_ids:
-            raise ValidationError("At least one unit is required", field="unit_ids")
-        if len(set(command.unit_ids)) != len(command.unit_ids):
-            raise ValidationError("unit_ids must not contain duplicates", field="unit_ids")
+        self._validate_create_command(command)
 
         try:
             with self._write() as (loans, master_data):
-                self._require_active_borrower(master_data, command.borrower_id)
-                self._require_active_staff(master_data, command.recorded_by_staff_id)
-                for unit_id in command.unit_ids:
-                    self._require_available_unit(master_data, unit_id)
+                self._validate_create_relations(master_data, command)
                 return loans.create_draft(command)
         except sqlite3.IntegrityError as error:
-            if ".transaction_code" in str(error):
-                raise DuplicateCodeError(
-                    "transaction_code", command.transaction_code
-                ) from error
-            raise
+            self._raise_create_integrity_error(error, command)
+
+    def create_and_confirm(self, command: CreateDraftLoan) -> Loan:
+        """Create and activate a loan in one database transaction."""
+        self._validate_create_command(command)
+
+        try:
+            with self._write() as (loans, master_data):
+                self._validate_create_relations(master_data, command)
+                draft = loans.create_draft(command)
+                for unit_id in command.unit_ids:
+                    if not loans.mark_unit_borrowed_if_available(unit_id):
+                        current = master_data.get_unit(unit_id)
+                        current_status = current.status.value if current else "not_found"
+                        raise UnitNotAvailable(unit_id, current_status)
+                if not loans.activate_if_draft(draft.id):
+                    raise LoanNotDraft(draft.id, LoanStatus.DRAFT.value)
+                confirmed = loans.get(draft.id)
+                assert confirmed is not None
+                return confirmed
+        except sqlite3.IntegrityError as error:
+            self._raise_create_integrity_error(error, command)
 
     def get(self, loan_id: int) -> Loan:
         with connection(self.database_path) as database:
@@ -102,6 +104,39 @@ class SQLiteLoanService:
             confirmed = loans.get(loan_id)
             assert confirmed is not None
             return confirmed
+
+    @staticmethod
+    def _validate_create_command(command: CreateDraftLoan) -> None:
+        if not command.transaction_code.strip():
+            raise ValidationError(
+                "transaction_code is required", field="transaction_code"
+            )
+        if command.due_date < command.borrow_date:
+            raise ValidationError(
+                "due_date must not be before borrow_date", field="due_date"
+            )
+        if not command.unit_ids:
+            raise ValidationError("At least one unit is required", field="unit_ids")
+        if len(set(command.unit_ids)) != len(command.unit_ids):
+            raise ValidationError("unit_ids must not contain duplicates", field="unit_ids")
+
+    def _validate_create_relations(
+        self, repository: MasterDataRepository, command: CreateDraftLoan
+    ) -> None:
+        self._require_active_borrower(repository, command.borrower_id)
+        self._require_active_staff(repository, command.recorded_by_staff_id)
+        for unit_id in command.unit_ids:
+            self._require_available_unit(repository, unit_id)
+
+    @staticmethod
+    def _raise_create_integrity_error(
+        error: sqlite3.IntegrityError, command: CreateDraftLoan
+    ) -> None:
+        if ".transaction_code" in str(error):
+            raise DuplicateCodeError(
+                "transaction_code", command.transaction_code
+            ) from error
+        raise error
 
     @staticmethod
     def _require_active_borrower(

@@ -26,6 +26,16 @@ def bangkok_today(now: datetime | None = None) -> date:
     return instant.astimezone(BANGKOK_TIMEZONE).date()
 
 
+def bangkok_date(timestamp: str | datetime) -> date:
+    """Convert a persisted UTC timestamp to its Bangkok calendar date."""
+    instant = (
+        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        if isinstance(timestamp, str)
+        else timestamp
+    )
+    return bangkok_today(instant)
+
+
 def get_database_path() -> Path:
     """Resolve the database path from APP_DB_PATH or the project default."""
     configured_path = os.getenv("APP_DB_PATH")
@@ -221,6 +231,29 @@ MIGRATIONS: tuple[str, ...] = (
     BEGIN
         SELECT RAISE(ABORT, 'audit logs are append-only');
     END;
+    """,
+    """
+    CREATE TABLE equipment_categories (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+
+    INSERT OR IGNORE INTO equipment_categories(name)
+    SELECT DISTINCT TRIM(category)
+    FROM equipment
+    WHERE category IS NOT NULL AND TRIM(category) <> '';
+
+    ALTER TABLE equipment
+    ADD COLUMN category_id INTEGER REFERENCES equipment_categories(id);
+
+    UPDATE equipment
+    SET category_id = (
+        SELECT id
+        FROM equipment_categories
+        WHERE name = equipment.category COLLATE NOCASE
+    )
+    WHERE category IS NOT NULL AND TRIM(category) <> '';
     """,
 )
 

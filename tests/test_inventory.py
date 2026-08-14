@@ -28,3 +28,18 @@ def test_build_inventory_view_returns_container() -> None:
     view = build_inventory_view(FakeInventoryService())
 
     assert isinstance(view, ft.Container)
+
+
+def test_legacy_lost_unit_can_be_recovered_from_inventory() -> None:
+    service = FakeInventoryService()
+
+    recovered = service.update_unit_status(
+        "unit-4",
+        "lost_recovered",
+        location="Lab A - Shelf 2",
+        reason="พบอุปกรณ์แล้ว",
+    )
+
+    assert recovered is not None
+    assert recovered.status == "available"
+    assert service.list_lost_cases(status="open") == []

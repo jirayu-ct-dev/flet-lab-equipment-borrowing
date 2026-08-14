@@ -2,6 +2,7 @@ from datetime import date, timedelta
 import flet as ft
 
 from app.components.common import build_card, build_page_header, update_control
+from app.database import bangkok_today
 from app.services.fake_services import FakeInventoryService
 from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
 
@@ -36,8 +37,8 @@ class BorrowFlowView(ft.Container):
         )
 
         self.staff_dropdown = ft.Dropdown(
-            label="เจ้าหน้าที่ผู้ดำเนินการ",
-            hint_text="เลือกเจ้าหน้าที่",
+            label="ผู้บันทึกรายการ",
+            hint_text="เลือกชื่อผู้บันทึก",
             expand=True,
             options=[
                 ft.DropdownOption(
@@ -49,7 +50,7 @@ class BorrowFlowView(ft.Container):
         )
 
         self.unit_dropdown = ft.Dropdown(
-            label="หน่วยอุปกรณ์ (พร้อมใช้งาน)",
+            label="อุปกรณ์ที่ต้องการยืม",
             hint_text="เลือกอุปกรณ์ที่พร้อมให้ยืม",
             expand=True,
             options=[
@@ -69,7 +70,7 @@ class BorrowFlowView(ft.Container):
             label="วันที่ยืม",
             hint_text="YYYY-MM-DD",
             prefix_icon=ft.Icons.CALENDAR_TODAY,
-            value=date.today().isoformat(),
+            value=bangkok_today().isoformat(),
             expand=True,
         )
 
@@ -77,7 +78,7 @@ class BorrowFlowView(ft.Container):
             label="วันที่ครบกำหนดคืน",
             hint_text="YYYY-MM-DD",
             prefix_icon=ft.Icons.EVENT_REPEAT,
-            value=(date.today() + timedelta(days=7)).isoformat(),
+            value=(bangkok_today() + timedelta(days=3)).isoformat(),
             expand=True,
         )
 
@@ -102,29 +103,20 @@ class BorrowFlowView(ft.Container):
         )
 
         self.summary = ft.Text(
-            "กรุณากรอกข้อมูลและกกด 'สร้างร่าง' เพื่อตรวจสอบรายการ",
+            "กรอกข้อมูลให้ครบ แล้วกดบันทึกการยืม",
             size=13,
             color=COLOR_TEXT_SECONDARY,
         )
 
-        self.create_button = ft.ElevatedButton(
-            "1. สร้างร่างรายการยืม",
-            icon=ft.Icons.NOTE_ADD,
+        self.create_button = ft.Button(
+            "บันทึกการยืม",
+            icon=ft.Icons.CHECK_CIRCLE,
             style=ft.ButtonStyle(
                 color=ft.Colors.WHITE,
                 bgcolor=ft.Colors.BLUE_600,
                 padding=ft.Padding.symmetric(horizontal=20, vertical=12),
             ),
-            on_click=self._handle_create_draft,
-        )
-
-        self.confirm_button = ft.OutlinedButton(
-            "2. ยืนยันการยืม",
-            icon=ft.Icons.CHECK_CIRCLE,
-            style=ft.ButtonStyle(
-                padding=ft.Padding.symmetric(horizontal=20, vertical=12),
-            ),
-            on_click=self._handle_confirm_draft,
+            on_click=self._handle_borrow,
         )
 
         self._build_view()
@@ -139,18 +131,18 @@ class BorrowFlowView(ft.Container):
         }.get(status, status)
 
     def _set_due_date_days(self, days: int) -> None:
-        today_str = self.borrow_date.value or date.today().isoformat()
+        today_str = self.borrow_date.value or bangkok_today().isoformat()
         try:
             start = date.fromisoformat(today_str)
         except Exception:
-            start = date.today()
+            start = bangkok_today()
         self.due_date.value = (start + timedelta(days=days)).isoformat()
         update_control(self)
 
     def _build_view(self) -> None:
         header = build_page_header(
-            title="สร้างรายการยืมอุปกรณ์",
-            subtitle="เลือกผู้ยืม เจ้าหน้าที่ และอุปกรณ์ พร้อมกำหนดวันและวัตถุประสงค์",
+            title="ทำรายการยืม",
+            subtitle="เลือกผู้ยืม อุปกรณ์ และวันที่ต้องคืน",
             icon=ft.Icons.ASSIGNMENT,
         )
 
@@ -160,14 +152,14 @@ class BorrowFlowView(ft.Container):
                     ft.Row(
                         controls=[
                             ft.Icon(ft.Icons.LOOKS_ONE_ROUNDED, color=ft.Colors.BLUE_600, size=20),
-                            ft.Text("ข้อมูลผู้เกี่ยวข้อง", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
+                            ft.Text("1. เลือกผู้ยืมและผู้บันทึก", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
                         ],
                         spacing=8,
                     ),
-                    ft.Row(
+                    ft.ResponsiveRow(
                         controls=[
-                            self.borrower_dropdown,
-                            self.staff_dropdown,
+                            ft.Container(content=self.borrower_dropdown, col={"sm": 12, "md": 6}),
+                            ft.Container(content=self.staff_dropdown, col={"sm": 12, "md": 6}),
                         ],
                         spacing=12,
                     ),
@@ -182,7 +174,7 @@ class BorrowFlowView(ft.Container):
                     ft.Row(
                         controls=[
                             ft.Icon(ft.Icons.LOOKS_TWO_ROUNDED, color=ft.Colors.BLUE_600, size=20),
-                            ft.Text("เลือกอุปกรณ์ที่ต้องการยืม", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
+                            ft.Text("2. เลือกอุปกรณ์", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
                         ],
                         spacing=8,
                     ),
@@ -213,6 +205,8 @@ class BorrowFlowView(ft.Container):
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            wrap=True,
+            run_spacing=8,
         )
 
         step3_card = build_card(
@@ -221,14 +215,14 @@ class BorrowFlowView(ft.Container):
                     ft.Row(
                         controls=[
                             ft.Icon(ft.Icons.LOOKS_3_ROUNDED, color=ft.Colors.BLUE_600, size=20),
-                            ft.Text("ระยะเวลา และ วัตถุประสงค์", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
+                            ft.Text("3. กำหนดวันคืนและรายละเอียด", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
                         ],
                         spacing=8,
                     ),
-                    ft.Row(
+                    ft.ResponsiveRow(
                         controls=[
-                            self.borrow_date,
-                            self.due_date,
+                            ft.Container(content=self.borrow_date, col={"sm": 12, "md": 6}),
+                            ft.Container(content=self.due_date, col={"sm": 12, "md": 6}),
                         ],
                         spacing=12,
                     ),
@@ -243,9 +237,10 @@ class BorrowFlowView(ft.Container):
         action_row = ft.Row(
             controls=[
                 self.create_button,
-                self.confirm_button,
             ],
             spacing=12,
+            wrap=True,
+            run_spacing=8,
         )
 
         summary_card = build_card(
@@ -280,7 +275,7 @@ class BorrowFlowView(ft.Container):
             expand=True,
         )
 
-    def _handle_create_draft(
+    def _handle_borrow(
         self,
         e: ft.ControlEvent,
     ) -> None:
@@ -296,11 +291,11 @@ class BorrowFlowView(ft.Container):
             return
 
         if not staff_code:
-            self._show_error("กรุณาเลือกเจ้าหน้าที่")
+            self._show_error("กรุณาเลือกผู้บันทึกรายการ")
             return
 
         if not unit_id:
-            self._show_error("กรุณาเลือกหน่วยอุปกรณ์")
+            self._show_error("กรุณาเลือกอุปกรณ์")
             return
 
         if not borrow_date:
@@ -316,7 +311,7 @@ class BorrowFlowView(ft.Container):
             return
 
         try:
-            draft = self.service.create_borrow_draft(
+            confirmed = self.service.create_and_confirm_borrow(
                 borrower_code=borrower_code,
                 staff_code=staff_code,
                 unit_ids=[unit_id],
@@ -325,62 +320,17 @@ class BorrowFlowView(ft.Container):
                 purpose=purpose,
             )
 
-            if draft is None:
-                self._show_error(
-                    "ไม่สามารถสร้างร่างรายการยืมได้"
-                )
+            if confirmed is None:
+                self._show_error("บันทึกไม่ได้ อุปกรณ์อาจไม่พร้อมให้ยืม")
                 return
 
             self.summary.value = (
-                f"สร้างร่างสำเร็จ!\n"
+                f"บันทึกการยืมเรียบร้อย\n"
                 f"• ผู้ยืม: {borrower_code}\n"
-                f"• เจ้าหน้าที่: {staff_code}\n"
-                f"• รหัสหน่วย: {unit_id}\n"
-                f"• วันครบกำหนด: {due_date}\n\n"
-                f"กดยืนยันการยืมด้านบนเพื่อเสร็จสิ้นกระบวนการ"
+                f"• รหัสอุปกรณ์: {unit_id}\n"
+                f"• กำหนดคืน: {due_date}"
             )
             self.summary.color = ft.Colors.GREEN_800
-
-        except Exception as exc:
-            self._show_error(str(exc))
-
-        update_control(self)
-
-    def _handle_confirm_draft(
-        self,
-        e: ft.ControlEvent,
-    ) -> None:
-        drafts = getattr(
-            self.service,
-            "_borrow_drafts",
-            [],
-        )
-
-        if not drafts:
-            self._show_error(
-                "กรุณาสร้างร่างรายการยืมก่อนยืนยัน"
-            )
-            return
-
-        try:
-            draft = self.service.confirm_borrow_draft(
-                drafts[-1].id
-            )
-
-            if draft is None:
-                self._show_error(
-                    "ไม่สามารถยืนยันรายการยืมได้"
-                )
-                return
-
-            self.summary.value = (
-                f"ยืนยันการยืมสำเร็จ!\n"
-                f"• เลขที่ร่างสัญญายืม: {draft.id}\n"
-                f"• สถานะ: ดำเนินการยืมเรียบร้อยแล้ว"
-            )
-            self.summary.color = ft.Colors.GREEN_800
-
-            # refresh available units
             self._refresh_units()
 
         except Exception as exc:

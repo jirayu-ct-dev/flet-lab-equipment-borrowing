@@ -1,6 +1,20 @@
-# Lab Equipment Borrowing System
+# ระบบยืม–คืนอุปกรณ์ห้องแล็บ
 
-Flet Web foundation สำหรับระบบยืม–คืนอุปกรณ์ห้องปฏิบัติการ
+Mini project สำหรับบันทึกอุปกรณ์ ผู้ยืม การยืม การคืน และประวัติ ใช้งานผ่านเว็บ
+และเก็บข้อมูลใน SQLite บนเครื่องเดียว
+
+## สิ่งที่ระบบทำได้
+
+- ใช้ Dashboard ดูภาพรวมและเปิดงานจัดการคลังผ่าน 3 ปุ่ม
+- เพิ่มและค้นหาอุปกรณ์แต่ละชิ้น
+- เพิ่มผู้บันทึกรายการและผู้ยืม
+- ทำรายการยืม โดยกำหนดคืนเริ่มต้น 3 วัน
+- คืนอุปกรณ์ปกติหรือส่งซ่อม และรองรับการคืนบางส่วน
+- ดูประวัติย้อนหลัง
+- ใช้วันที่ของระบบตามเขตเวลา `Asia/Bangkok`
+
+ระบบนี้ตั้งใจให้ใช้เองหรือใช้ในทีมเล็ก จึงยังไม่มี Login, การอนุมัติหลายขั้น,
+การชดใช้ของสูญหาย, QR code, การแจ้งเตือน และรายงานขั้นสูง
 
 ## เครื่องมือที่ต้องมี
 
@@ -25,7 +39,6 @@ python -m pip install -r requirements.txt
 
 ```bash
 flet run --web --port 8550 main.py
-
 ```
 
 เปิด [http://localhost:8550](http://localhost:8550) ในเบราว์เซอร์
@@ -102,10 +115,10 @@ python -m pytest
 
 ## เอกสารโครงการ
 
-รายละเอียดขอบเขต, data model, business rules และแผนพัฒนาอยู่ใน
+ขอบเขตและลำดับงานฉบับย่ออยู่ใน
 [docs/project-plan.md](docs/project-plan.md)
 
 เอกสารมอบหมายงานแยกตามทีม:
 
-- [Frontend Scope](docs/scopes/frontend.md)
-- [Backend Scope](docs/scopes/backend.md)
+- [งาน Frontend](docs/scopes/frontend.md)
+- [งาน Backend](docs/scopes/backend.md)

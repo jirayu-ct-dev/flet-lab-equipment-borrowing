@@ -34,6 +34,7 @@ from app.services import (
     SQLiteStaffService,
     SQLiteUnitService,
 )
+from app.repositories import LoanRepository
 
 
 @pytest.fixture
@@ -102,6 +103,45 @@ def test_create_and_confirm_multi_unit_loan_atomically(loan_context) -> None:
             "SELECT current_location_id FROM equipment_units ORDER BY id"
         ).fetchall()
     assert [row[0] for row in locations] == [None, None]
+
+
+def test_create_and_confirm_rolls_back_new_loan_when_activation_fails(
+    loan_context, monkeypatch
+) -> None:
+    command = CreateDraftLoan(
+        transaction_code="LOAN-ATOMIC",
+        borrower_id=loan_context["borrower"].id,
+        recorded_by_staff_id=loan_context["staff"].id,
+        borrow_date=date(2026, 8, 7),
+        due_date=date(2026, 8, 10),
+        unit_ids=tuple(unit.id for unit in loan_context["units"]),
+        purpose="Lab class",
+    )
+    original = LoanRepository.mark_unit_borrowed_if_available
+    calls = 0
+
+    def fail_on_second_unit(repository, unit_id):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            return False
+        return original(repository, unit_id)
+
+    monkeypatch.setattr(
+        LoanRepository, "mark_unit_borrowed_if_available", fail_on_second_unit
+    )
+
+    with pytest.raises(UnitNotAvailable):
+        loan_context["loans"].create_and_confirm(command)
+
+    with connect(loan_context["path"]) as database:
+        assert database.execute(
+            "SELECT COUNT(*) FROM borrow_transactions"
+        ).fetchone()[0] == 0
+        statuses = database.execute(
+            "SELECT status FROM equipment_units ORDER BY id"
+        ).fetchall()
+    assert [row[0] for row in statuses] == ["available", "available"]
 
 
 def test_duplicate_transaction_code_is_domain_error(loan_context) -> None:

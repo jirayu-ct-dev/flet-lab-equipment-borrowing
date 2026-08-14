@@ -7,6 +7,7 @@ import pytest
 
 from app.database import (
     MIGRATIONS,
+    bangkok_date,
     bangkok_today,
     connect,
     get_database_path,
@@ -32,7 +33,10 @@ def test_initialize_is_idempotent_and_enables_foreign_keys(tmp_path) -> None:
         versions = database.execute(
             "SELECT version FROM schema_migrations"
         ).fetchall()
-        assert [row["version"] for row in versions] == [1, 2, 3, 4]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5]
+        assert database.execute(
+            "SELECT name FROM equipment_categories ORDER BY name"
+        ).fetchall() == []
 
         with pytest.raises(sqlite3.IntegrityError):
             database.execute(
@@ -94,6 +98,7 @@ def test_timestamps_are_utc_and_business_dates_use_bangkok(tmp_path) -> None:
 
     assert created_at.endswith("Z")
     assert bangkok_today(datetime(2026, 8, 7, 18, 0, tzinfo=timezone.utc)).isoformat() == "2026-08-08"
+    assert bangkok_date("2026-08-07T18:00:00.000Z").isoformat() == "2026-08-08"
 
 
 def test_existing_version_one_database_upgrades_through_all_migrations(tmp_path) -> None:
@@ -123,6 +128,9 @@ def test_existing_version_one_database_upgrades_through_all_migrations(tmp_path)
         lost_case_columns = {
             row["name"] for row in database.execute("PRAGMA table_info(lost_cases)")
         }
+        equipment_columns = {
+            row["name"] for row in database.execute("PRAGMA table_info(equipment)")
+        }
         audit_triggers = {
             row["name"]
             for row in database.execute(
@@ -130,7 +138,8 @@ def test_existing_version_one_database_upgrades_through_all_migrations(tmp_path)
             )
         }
 
-    assert [row["version"] for row in versions] == [1, 2, 3, 4]
+    assert [row["version"] for row in versions] == [1, 2, 3, 4, 5]
     assert "location_id" in return_item_columns
     assert "replacement_unit_id" in lost_case_columns
+    assert "category_id" in equipment_columns
     assert audit_triggers == {"audit_logs_no_update", "audit_logs_no_delete"}

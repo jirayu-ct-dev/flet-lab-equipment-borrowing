@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scrutinize"
+  short_description: "Review plans and code changes end to end"
+  default_prompt: "Use $scrutinize to review this change end to end and report concise, evidence-backed findings."

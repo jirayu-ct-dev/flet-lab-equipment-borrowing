@@ -1,14 +1,18 @@
 import flet as ft
 
 from app.components.common import (
-    build_card,
+    build_filter_bar,
+    build_form_dialog,
     build_page_header,
     build_state_view,
     build_status_chip,
+    build_table_surface,
+    close_dialog,
+    open_dialog,
     update_control,
 )
 from app.services.fake_services import FakeInventoryService, LoanRecord
-from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
+from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, CONTROL_RADIUS
 
 
 class LoansView(ft.Container):
@@ -16,19 +20,34 @@ class LoansView(ft.Container):
         super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
 
+        self.search_field = ft.TextField(
+            label="ค้นหารายการยืมหรือผู้ยืม",
+            hint_text="เช่น loan-1 หรือ BR-001",
+            prefix_icon=ft.Icons.SEARCH,
+            width=float("inf"),
+            height=52,
+            border_radius=CONTROL_RADIUS,
+            on_change=self._handle_search,
+            on_submit=self._handle_search,
+        )
         self.filter_dropdown = ft.Dropdown(
-            label="กรองสถานะสัญญายืม",
+            label="กรองรายการยืม",
             options=[
-                ft.dropdown.Option("all", "สัญญายืมทั้งหมด"),
+                ft.dropdown.Option("all", "รายการทั้งหมด"),
                 ft.dropdown.Option("today", "ครบกำหนดวันนี้"),
                 ft.dropdown.Option("soon", "ใกล้ครบกำหนด (ใน 7 วัน)"),
                 ft.dropdown.Option("overdue", "เกินกำหนดคืน"),
                 ft.dropdown.Option("partial", "คืนบางส่วน"),
             ],
             value="all",
-            width=220,
+            expand=True,
+            height=52,
+            border_radius=CONTROL_RADIUS,
         )
         self.filter_dropdown.on_change = self._handle_filter_change
+        self.filter_dropdown_row = ft.Row(
+            controls=[self.filter_dropdown], spacing=0, width=320
+        )
 
         self.loan_container = ft.Container(expand=True)
         self.selected_loan: LoanRecord | None = None
@@ -39,7 +58,6 @@ class LoansView(ft.Container):
             options=[
                 ft.dropdown.Option("returned", "คืนแล้ว (สภาพสมบูรณ์)"),
                 ft.dropdown.Option("maintenance", "ส่งซ่อมบำรุง"),
-                ft.dropdown.Option("reported_lost", "แจ้งสูญหาย"),
             ],
             value="returned",
             expand=True,
@@ -47,7 +65,7 @@ class LoansView(ft.Container):
         self.return_action_dropdown.on_change = self._handle_return_action_change
 
         self.receiving_staff_dropdown = ft.Dropdown(
-            label="เจ้าหน้าที่ผู้รับคืน",
+            label="ผู้บันทึกการคืน",
             options=[ft.dropdown.Option(item.staff_code, f"{item.staff_code} — {item.full_name}") for item in self.service.list_staff()],
             expand=True,
         )
@@ -65,80 +83,67 @@ class LoansView(ft.Container):
             label="สภาพอุปกรณ์ / หมายเหตุ",
             hint_text="ระบุสภาพของอุปกรณ์ที่นำมาคืน...",
             prefix_icon=ft.Icons.NOTE_ALT_OUTLINED,
-            expand=True,
+        )
+        self.return_action_row = ft.Row(
+            controls=[self.return_action_dropdown], spacing=0, width=float("inf")
+        )
+        self.receiving_staff_row = ft.Row(
+            controls=[self.receiving_staff_dropdown], spacing=0, width=float("inf")
+        )
+        self.return_location_row = ft.Row(
+            controls=[self.return_location_dropdown], spacing=0, width=float("inf")
         )
 
         self.selected_units_container = ft.Container(expand=True)
-        self.confirmation_summary = ft.Text("เลือกหน่วยและผลลัพธ์ก่อนยืนยัน", size=13, color=COLOR_TEXT_SECONDARY)
+        self.confirmation_summary = ft.Text("เลือกรายการและอุปกรณ์ที่จะคืน", size=13, color=COLOR_TEXT_SECONDARY)
         self.feedback = ft.Text("", size=13, color=COLOR_TEXT_SECONDARY, weight=ft.FontWeight.W_500)
+        self.return_form_feedback = ft.Text("", size=13, color=COLOR_TEXT_SECONDARY, weight=ft.FontWeight.W_500)
+        self.return_dialog = build_form_dialog(
+            title="บันทึกการคืน",
+            icon=ft.Icons.ASSIGNMENT_TURNED_IN,
+            content=ft.Column(
+                controls=[
+                    self.selected_units_container,
+                    ft.Divider(height=12, color=ft.Colors.GREY_200),
+                    self.return_action_row,
+                    self.return_notes,
+                    self.receiving_staff_row,
+                    self.return_location_row,
+                    self.confirmation_summary,
+                    self.return_form_feedback,
+                ],
+                spacing=12,
+                tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
+            save_label="ยืนยันการรับคืน",
+            on_save=self._handle_confirm_return,
+            on_cancel=lambda e: close_dialog(self, self.return_dialog),
+        )
 
         self._build_view()
 
     def _build_view(self) -> None:
         header = build_page_header(
-            title="สัญญายืม & คืนอุปกรณ์",
-            subtitle="จัดการสัญญายืม และดำเนินการรับคืนอุปกรณ์ทั้งแบบบางส่วนหรือทั้งหมด",
+            title="คืนอุปกรณ์",
+            subtitle="เลือกรายการยืม แล้วบันทึกอุปกรณ์ที่นำมาคืน",
             icon=ft.Icons.RECEIPT_LONG,
         )
 
-        filter_bar = build_card(
-            content=ft.Row(
-                controls=[
-                    self.filter_dropdown,
-                    ft.OutlinedButton(
-                        "รีเฟรชข้อมูล",
-                        icon=ft.Icons.REFRESH,
-                        on_click=self._handle_refresh,
+        filter_bar = build_filter_bar(
+            search_control=self.search_field,
+            action_controls=[
+                self.filter_dropdown_row,
+                ft.OutlinedButton(
+                    "รีเฟรชข้อมูล",
+                    icon=ft.Icons.REFRESH,
+                    height=52,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
                     ),
-                ],
-                spacing=12,
-            ),
-        )
-
-        return_form_card = build_card(
-            content=ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.ASSIGNMENT_TURNED_IN, color=ft.Colors.BLUE_600, size=20),
-                            ft.Text("ดำเนินการคืนอุปกรณ์", size=16, weight=ft.FontWeight.BOLD, color=COLOR_TEXT_PRIMARY),
-                        ],
-                        spacing=8,
-                    ),
-                    self.selected_units_container,
-                    ft.Divider(height=12, color=ft.Colors.GREY_200),
-                    ft.Row(
-                        controls=[
-                            self.return_action_dropdown,
-                            self.return_notes,
-                        ],
-                        spacing=12,
-                    ),
-                    ft.Row(
-                        controls=[self.receiving_staff_dropdown, self.return_location_dropdown],
-                        spacing=12,
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.ElevatedButton(
-                                "ยืนยันการรับคืน",
-                                icon=ft.Icons.CHECK_CIRCLE,
-                                style=ft.ButtonStyle(
-                                    color=ft.Colors.WHITE,
-                                    bgcolor=ft.Colors.GREEN_600,
-                                    padding=ft.Padding.symmetric(horizontal=20, vertical=12),
-                                ),
-                                on_click=self._handle_confirm_return,
-                            ),
-                            self.confirmation_summary,
-                        ],
-                        spacing=16,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    self.feedback,
-                ],
-                spacing=12,
-            ),
+                    on_click=self._handle_refresh,
+                ),
+            ],
         )
 
         self.content = ft.Column(
@@ -146,7 +151,7 @@ class LoansView(ft.Container):
                 header,
                 filter_bar,
                 self.loan_container,
-                return_form_card,
+                self.feedback,
             ],
             spacing=16,
             expand=True,
@@ -173,94 +178,71 @@ class LoansView(ft.Container):
 
     def _render_loans(self) -> None:
         loan_list = self.service.list_loans(filter_type=self.filter_dropdown.value)
+        query = (self.search_field.value or "").strip().lower()
+        if query:
+            loan_list = [
+                loan
+                for loan in loan_list
+                if query in loan.id.lower() or query in loan.borrower_code.lower()
+            ]
         if not loan_list:
-            self.loan_container.content = build_state_view("ไม่มีสัญญายืม", "ไม่มีสัญญายืมที่ตรงกับตัวกรองนี้", icon=ft.Icons.RECEIPT_LONG_OUTLINED)
+            self.loan_container.content = build_state_view(
+                "ไม่พบรายการยืม",
+                "ลองเปลี่ยนคำค้นหาหรือตัวกรองรายการ",
+                icon=ft.Icons.RECEIPT_LONG_OUTLINED,
+            )
             self.selected_loan = None
             self.selected_unit_ids = []
             self._render_selected_units()
             self._update_confirmation_summary()
             return
 
-        cards: list[ft.Container] = []
-        for loan in loan_list:
-            is_overdue = loan.status == "overdue"
-
-            card_content = ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.RECEIPT, size=18, color=ft.Colors.RED_600 if is_overdue else ft.Colors.BLUE_600),
-                            ft.Text(f"สัญญายืม {loan.id}", weight=ft.FontWeight.BOLD, size=15, color=COLOR_TEXT_PRIMARY),
-                            ft.Container(expand=True),
-                            build_status_chip(loan.status, self._translate_loan_status(loan.status)),
-                        ],
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    ft.Divider(height=8, color=ft.Colors.GREY_200),
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.PERSON_OUTLINE, size=14, color=COLOR_TEXT_SECONDARY),
-                            ft.Text(f"ผู้ยืม: {loan.borrower_code}", size=12, color=COLOR_TEXT_PRIMARY),
-                            ft.Icon(ft.Icons.BADGE_OUTLINED, size=14, color=COLOR_TEXT_SECONDARY),
-                            ft.Text(f"เจ้าหน้าที่: {loan.staff_code}", size=12, color=COLOR_TEXT_PRIMARY),
-                        ],
-                        spacing=12,
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.Icon(
-                                ft.Icons.ERROR_OUTLINE if is_overdue else ft.Icons.CALENDAR_MONTH,
-                                size=14,
-                                color=ft.Colors.RED_600 if is_overdue else COLOR_TEXT_SECONDARY,
-                            ),
+        table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("รายการ"), expand=2),
+                ft.DataColumn(ft.Text("ผู้ยืม"), expand=2),
+                ft.DataColumn(ft.Text("ผู้บันทึก"), expand=2),
+                ft.DataColumn(ft.Text("ครบกำหนด"), expand=2),
+                ft.DataColumn(ft.Text("สถานะ"), expand=2),
+                ft.DataColumn(ft.Text("คืนแล้ว"), expand=2),
+                ft.DataColumn(ft.Text("จัดการ"), expand=2),
+            ],
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(f"รายการยืม {loan.id}", weight=ft.FontWeight.W_600)),
+                        ft.DataCell(ft.Text(loan.borrower_code)),
+                        ft.DataCell(ft.Text(loan.staff_code)),
+                        ft.DataCell(
                             ft.Text(
-                                f"ครบกำหนด: {loan.due_date}",
-                                size=12,
-                                weight=ft.FontWeight.BOLD if is_overdue else ft.FontWeight.NORMAL,
-                                color=ft.Colors.RED_700 if is_overdue else COLOR_TEXT_PRIMARY,
-                            ),
-                        ],
-                        spacing=4,
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.INVENTORY_2_OUTLINED, size=14, color=COLOR_TEXT_SECONDARY),
-                            ft.Text(f"หน่วยในสัญญา: {', '.join(loan.unit_ids)}", size=12, color=COLOR_TEXT_SECONDARY),
-                        ],
-                        spacing=4,
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, size=14, color=ft.Colors.GREEN_600),
-                            ft.Text(f"คืนแล้ว: {', '.join(loan.returned_unit_ids) or 'ยังไม่มี'}", size=12, color=COLOR_TEXT_SECONDARY),
-                        ],
-                        spacing=4,
-                    ),
-                    ft.ElevatedButton(
-                        "เลือกสัญญานี้เพื่อคืน",
-                        icon=ft.Icons.CHECK_BOX,
-                        style=ft.ButtonStyle(
-                            color=ft.Colors.WHITE,
-                            bgcolor=ft.Colors.BLUE_600 if self.selected_loan and self.selected_loan.id == loan.id else ft.Colors.GREY_700,
-                            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                                loan.due_date,
+                                color=ft.Colors.RED_700 if loan.status == "overdue" else COLOR_TEXT_PRIMARY,
+                                weight=ft.FontWeight.W_600 if loan.status == "overdue" else ft.FontWeight.NORMAL,
+                            )
                         ),
-                        on_click=lambda e, loan=loan: self._select_loan(e, loan),
-                    ),
-                ],
-                spacing=8,
-                tight=True,
-            )
-
-            card = build_card(
-                content=card_content,
-                padding=14,
-                width=340,
-                border_color=ft.Colors.RED_300 if is_overdue else None,
-                bgcolor=ft.Colors.RED_50 if is_overdue else ft.Colors.WHITE,
-            )
-            cards.append(card)
-
-        self.loan_container.content = ft.Row(controls=cards, wrap=True, spacing=12, run_spacing=12)
+                        ft.DataCell(build_status_chip(loan.status, self._translate_loan_status(loan.status))),
+                        ft.DataCell(ft.Text(f"{len(loan.returned_unit_ids)} / {len(loan.unit_ids)} ชิ้น")),
+                        ft.DataCell(
+                            ft.Button(
+                                "บันทึกการคืน",
+                                icon=ft.Icons.CHECK_BOX,
+                                color=ft.Colors.WHITE,
+                                bgcolor=(
+                                    ft.Colors.BLUE_600
+                                    if self.selected_loan and self.selected_loan.id == loan.id
+                                    else ft.Colors.GREY_700
+                                ),
+                                on_click=lambda e, loan=loan: self._open_return_dialog(e, loan),
+                            )
+                        ),
+                    ]
+                )
+                for loan in loan_list
+            ],
+            column_spacing=24,
+            horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
+        )
+        self.loan_container.content = build_table_surface(table, table_width=1150)
 
         if self.selected_loan is not None:
             refreshed_loan = self.service.get_loan(self.selected_loan.id)
@@ -277,7 +259,7 @@ class LoansView(ft.Container):
                 padding=12,
                 bgcolor=ft.Colors.GREY_100,
                 border_radius=8,
-                content=ft.Text("ขั้นตอนที่ 1: เลือกสัญญายืมจากรายการด้านบนเพื่อเลือกหน่วยที่จะคืน", size=13, color=COLOR_TEXT_SECONDARY),
+                content=ft.Text("เลือกรายการยืมจากตารางด้านบนก่อน", size=13, color=COLOR_TEXT_SECONDARY),
             )
             return
 
@@ -289,7 +271,7 @@ class LoansView(ft.Container):
                 padding=12,
                 bgcolor=ft.Colors.GREEN_50,
                 border_radius=8,
-                content=ft.Text("หน่วยทั้งหมดได้ถูกคืนแล้วสำหรับสัญญานี้ (สัญญาเสร็จสิ้น)", size=13, color=ft.Colors.GREEN_800),
+                content=ft.Text("คืนอุปกรณ์ในรายการนี้ครบแล้ว", size=13, color=ft.Colors.GREEN_800),
             )
             self.selected_unit_ids = []
             return
@@ -311,7 +293,7 @@ class LoansView(ft.Container):
         self.selected_units_container.content = ft.Column(
             controls=[
                 ft.Text(
-                    f"เลือกหน่วยที่จะคืนสำหรับสัญญา {self.selected_loan.id}:",
+                    f"เลือกอุปกรณ์ที่จะคืนจากรายการ {self.selected_loan.id}:",
                     size=14,
                     weight=ft.FontWeight.BOLD,
                     color=COLOR_TEXT_PRIMARY,
@@ -332,40 +314,47 @@ class LoansView(ft.Container):
 
     def _update_confirmation_summary(self) -> None:
         if self.selected_loan is None:
-            self.confirmation_summary.value = "เลือกสัญญายืมก่อนดำเนินการคืน"
+            self.confirmation_summary.value = "เลือกรายการยืมก่อน"
             self.confirmation_summary.color = COLOR_TEXT_SECONDARY
             return
 
         if not self.selected_unit_ids:
-            self.confirmation_summary.value = "เลือกอย่างน้อย 1 หน่วยอุปกรณ์ที่จะคืน"
+            self.confirmation_summary.value = "เลือกอุปกรณ์ที่จะคืนอย่างน้อย 1 ชิ้น"
             self.confirmation_summary.color = COLOR_TEXT_SECONDARY
             return
 
         if not self.receiving_staff_dropdown.value:
-            self.feedback.value = "กรุณาเลือกเจ้าหน้าที่ผู้รับคืน"
-            self.feedback.color = ft.Colors.RED_700
+            self.return_form_feedback.value = "กรุณาเลือกผู้บันทึกการคืน"
+            self.return_form_feedback.color = ft.Colors.RED_700
             update_control(self)
             return
 
         if self.return_action_dropdown.value != "reported_lost" and not self.return_location_dropdown.value:
-            self.feedback.value = "กรุณาเลือกตำแหน่งจัดเก็บหลังคืน"
-            self.feedback.color = ft.Colors.RED_700
+            self.return_form_feedback.value = "กรุณาเลือกตำแหน่งจัดเก็บหลังคืน"
+            self.return_form_feedback.color = ft.Colors.RED_700
             update_control(self)
             return
 
         action = self.return_action_dropdown.value or "returned"
         action_text = self._translate_return_action(action)
         self.confirmation_summary.value = (
-            f"พร้อมคืน {len(self.selected_unit_ids)} หน่วย ในสถานะ '{action_text}'"
+            f"พร้อมคืน {len(self.selected_unit_ids)} ชิ้น: {action_text}"
         )
         self.confirmation_summary.color = ft.Colors.BLUE_700
+
+    def _open_return_dialog(self, e: ft.ControlEvent, loan: LoanRecord) -> None:
+        self.return_form_feedback.value = ""
+        self._select_loan(e, loan)
+        self.feedback.value = ""
+        open_dialog(self, self.return_dialog)
+        update_control(self)
 
     def _select_loan(self, e: ft.ControlEvent, loan: LoanRecord) -> None:
         self.selected_loan = loan
         self.selected_unit_ids = list(
             unit_id for unit_id in loan.unit_ids if unit_id not in loan.returned_unit_ids
         )
-        self.feedback.value = f"เลือกสัญญายืม {loan.id} แล้ว"
+        self.feedback.value = f"เลือกรายการยืม {loan.id} แล้ว"
         self.feedback.color = ft.Colors.BLUE_700
         self._render_loans()
         self._render_selected_units()
@@ -373,6 +362,10 @@ class LoansView(ft.Container):
         update_control(self)
 
     def _handle_filter_change(self, e: ft.ControlEvent) -> None:
+        self._render_loans()
+        update_control(self)
+
+    def _handle_search(self, e: ft.ControlEvent | None) -> None:
         self._render_loans()
         update_control(self)
 
@@ -390,14 +383,14 @@ class LoansView(ft.Container):
 
     def _handle_confirm_return(self, e: ft.ControlEvent) -> None:
         if self.selected_loan is None:
-            self.feedback.value = "กรุณาเลือกสัญญายืมก่อน"
-            self.feedback.color = ft.Colors.RED_700
+            self.return_form_feedback.value = "กรุณาเลือกรายการยืมก่อน"
+            self.return_form_feedback.color = ft.Colors.RED_700
             update_control(self)
             return
 
         if not self.selected_unit_ids:
-            self.feedback.value = "กรุณาเลือกหน่วยอย่างน้อยหนึ่งหน่วยที่จะคืน"
-            self.feedback.color = ft.Colors.RED_700
+            self.return_form_feedback.value = "กรุณาเลือกอุปกรณ์ที่จะคืนอย่างน้อย 1 ชิ้น"
+            self.return_form_feedback.color = ft.Colors.RED_700
             update_control(self)
             return
 
@@ -411,17 +404,15 @@ class LoansView(ft.Container):
         )
 
         if result is None:
-            self.feedback.value = "ไม่สามารถดำเนินการคืนได้ กรุณาตรวจสอบหน่วยและสถานะสัญญายืม"
-            self.feedback.color = ft.Colors.RED_700
+            self.return_form_feedback.value = "บันทึกการคืนไม่สำเร็จ กรุณาตรวจสอบรายการและลองใหม่"
+            self.return_form_feedback.color = ft.Colors.RED_700
             update_control(self)
             return
 
         returned_count = len(self.selected_unit_ids)
-        self.feedback.value = (
-            f"Returned {returned_count} unit(s) for loan {result.id} "
-            f"(คืนสำเร็จ {returned_count} หน่วย สถานะสัญญา: {self._translate_loan_status(result.status)})"
-        )
+        self.feedback.value = f"บันทึกการคืน {returned_count} ชิ้นเรียบร้อย"
         self.feedback.color = ft.Colors.GREEN_700
+        self.return_form_feedback.value = ""
         self.return_notes.value = ""
 
         if result.status == "closed":
@@ -438,4 +429,5 @@ class LoansView(ft.Container):
         self._render_loans()
         self._render_selected_units()
         self._update_confirmation_summary()
+        close_dialog(self, self.return_dialog)
         update_control(self)

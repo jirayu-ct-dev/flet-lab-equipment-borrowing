@@ -18,26 +18,37 @@ def test_build_app_shell_returns_container() -> None:
     assert isinstance(shell, ft.Container)
 
 
+def test_desktop_navigation_uses_horizontal_icon_and_label_layout() -> None:
+    shell = build_app_shell()
+    sidebar_content = shell.content.controls[0].controls[0].content
+    navigation_menu = sidebar_content.controls[1]
+    first_item = navigation_menu.controls[0]
+
+    assert isinstance(first_item, ft.ListTile)
+    assert isinstance(first_item.leading, ft.Icon)
+    assert isinstance(first_item.title, ft.Text)
+    assert first_item.horizontal_spacing == 12
+    assert first_item.selected is True
+
+
 def test_navigation_items_include_expected_sections() -> None:
     items = get_navigation_items()
     labels = [item["label"] for item in items]
 
-    assert labels[0] == "Inventory"
-    assert "Loans" in labels
-    assert "Lost cases" in labels
-    assert "History" in labels
+    assert labels == ["Dashboard", "อุปกรณ์", "คนในระบบ", "ทำรายการยืม", "คืนอุปกรณ์", "ประวัติ"]
 
 
 def test_build_app_shell_switches_content_on_navigation_change() -> None:
     shell = build_app_shell()
     row = shell.content.controls[0]
-    nav = row.controls[0].content
+    navigation_menu = row.controls[0].content.controls[1]
     content_area = row.controls[2]
 
-    nav.selected_index = 1
-    nav.on_change(type("Event", (), {"control": nav})())
+    navigation_menu.controls[2].on_click(None)
 
     assert isinstance(content_area.content.content, StaffBorrowersView)
+    assert navigation_menu.controls[2].selected is True
+    assert navigation_menu.controls[0].selected is False
 
 
 def test_app_shell_switches_to_mobile_navigation() -> None:
@@ -48,10 +59,12 @@ def test_app_shell_switches_to_mobile_navigation() -> None:
 
     assert row.controls[0].visible is False
     assert mobile_navigation.visible is True
+    assert row.controls[2].content.padding == 20
 
     apply_shell_width(shell, 1440)
     assert row.controls[0].visible is True
     assert mobile_navigation.visible is False
+    assert row.controls[2].content.padding == 32
 
 
 def test_state_view_renders_title_and_message() -> None:

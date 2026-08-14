@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from app.database import bangkok_today
+
 
 @dataclass(frozen=True)
 class InventoryUnit:
@@ -11,6 +13,7 @@ class InventoryUnit:
     equipment_name: str
     status: str
     location: str
+    category: str = ""
     note: str | None = None
 
 
@@ -21,6 +24,12 @@ class InventoryEquipment:
     name: str
     category: str
     status: str = "active"
+
+
+@dataclass(frozen=True)
+class InventoryCategory:
+    id: str
+    name: str
 
 
 @dataclass(frozen=True)
@@ -104,16 +113,20 @@ class LostCaseRecord:
 
 class FakeInventoryService:
     def __init__(self) -> None:
+        self._categories = [
+            InventoryCategory(id="category-1", name="IT"),
+            InventoryCategory(id="category-2", name="Research"),
+        ]
         self._equipment = [
             InventoryEquipment(id="eq-1", equipment_code="EQ-100", name="Laptop", category="IT"),
             InventoryEquipment(id="eq-2", equipment_code="EQ-200", name="Microscope", category="Research"),
         ]
         self._units = [
-            InventoryUnit(id="unit-1", asset_code="AST-001", equipment_name="Laptop", status="available", location="Lab A - Shelf 1"),
-            InventoryUnit(id="unit-2", asset_code="AST-002", equipment_name="Laptop", status="borrowed", location="With Borrower"),
-            InventoryUnit(id="unit-3", asset_code="AST-003", equipment_name="Microscope", status="maintenance", location="Repair Room"),
-            InventoryUnit(id="unit-4", asset_code="AST-004", equipment_name="Microscope", status="reported_lost", location="Lost Case"),
-            InventoryUnit(id="unit-5", asset_code="AST-005", equipment_name="Laptop", status="retired", location="Archive"),
+            InventoryUnit(id="unit-1", asset_code="AST-001", equipment_name="Laptop", status="available", location="Lab A - Shelf 1", category="IT"),
+            InventoryUnit(id="unit-2", asset_code="AST-002", equipment_name="Laptop", status="borrowed", location="With Borrower", category="IT"),
+            InventoryUnit(id="unit-3", asset_code="AST-003", equipment_name="Microscope", status="maintenance", location="Repair Room", category="Research"),
+            InventoryUnit(id="unit-4", asset_code="AST-004", equipment_name="Microscope", status="reported_lost", location="Lost Case", category="Research"),
+            InventoryUnit(id="unit-5", asset_code="AST-005", equipment_name="Laptop", status="retired", location="Archive", category="IT"),
         ]
         self._staff = [
             StaffRecord(id="staff-1", staff_code="ST-001", full_name="Ada Lovelace", email="ada@example.com", status="active"),
@@ -130,8 +143,8 @@ class FakeInventoryService:
                 borrower_code="BR-001",
                 staff_code="ST-001",
                 unit_ids=["unit-2"],
-                borrow_date=(date.today() - timedelta(days=3)).isoformat(),
-                due_date=(date.today() + timedelta(days=4)).isoformat(),
+                borrow_date=(bangkok_today() - timedelta(days=3)).isoformat(),
+                due_date=(bangkok_today() + timedelta(days=4)).isoformat(),
                 purpose="Team demo",
                 returned_unit_ids=[],
                 status="active",
@@ -141,7 +154,7 @@ class FakeInventoryService:
             HistoryEvent(
                 id="hist-1",
                 event_type="borrowed",
-                event_date=(date.today() - timedelta(days=3)).isoformat(),
+                event_date=(bangkok_today() - timedelta(days=3)).isoformat(),
                 description="Lin Chen ยืม Laptop AST-002",
                 borrower_code="BR-001",
                 staff_code="ST-001",
@@ -152,7 +165,7 @@ class FakeInventoryService:
             HistoryEvent(
                 id="hist-2",
                 event_type="maintenance",
-                event_date=(date.today() - timedelta(days=5)).isoformat(),
+                event_date=(bangkok_today() - timedelta(days=5)).isoformat(),
                 description="Microscope AST-003 ส่งซ่อม",
                 staff_code="ST-001",
                 equipment_name="Microscope",
@@ -166,7 +179,7 @@ class FakeInventoryService:
                 asset_code="AST-004",
                 equipment_name="Microscope",
                 borrower_code="BR-001",
-                reported_at=date.today().isoformat(),
+                reported_at=bangkok_today().isoformat(),
             )
         ]
 
@@ -251,6 +264,22 @@ class FakeInventoryService:
     def list_equipment(self) -> list[InventoryEquipment]:
         return list(self._equipment)
 
+    def list_categories(self) -> list[InventoryCategory]:
+        return list(self._categories)
+
+    def create_category(self, name: str) -> InventoryCategory | None:
+        cleaned_name = name.strip()
+        if not cleaned_name or any(
+            item.name.casefold() == cleaned_name.casefold()
+            for item in self._categories
+        ):
+            return None
+        category = InventoryCategory(
+            id=f"category-{len(self._categories) + 1}", name=cleaned_name
+        )
+        self._categories.append(category)
+        return category
+
     def list_locations(self) -> list[LocationRecord]:
         labels = sorted({unit.location for unit in self._units if unit.location != "With Borrower"})
         return [LocationRecord(id=f"location-{index}", location_code=f"LOC-{index:03d}", label=label) for index, label in enumerate(labels, 1)]
@@ -267,7 +296,16 @@ class FakeInventoryService:
     def get_unit_by_asset_code(self, asset_code: str) -> InventoryUnit | None:
         return self.get_unit(asset_code)
 
-    def create_equipment(self, name: str, equipment_code: str, category: str) -> InventoryEquipment:
+    def create_equipment(
+        self, name: str, equipment_code: str, category: str
+    ) -> InventoryEquipment | None:
+        if any(item.equipment_code == equipment_code for item in self._equipment):
+            return None
+        if not any(
+            item.name.casefold() == category.casefold()
+            for item in self._categories
+        ):
+            self.create_category(category)
         equipment = InventoryEquipment(
             id=f"eq-{len(self._equipment) + 1}",
             equipment_code=equipment_code,
@@ -276,6 +314,30 @@ class FakeInventoryService:
         )
         self._equipment.append(equipment)
         return equipment
+
+    def create_inventory_item(
+        self,
+        *,
+        name: str,
+        category_id: str,
+        asset_code: str,
+        location: str,
+    ) -> InventoryUnit | None:
+        category = next(
+            (item for item in self._categories if item.id == category_id), None
+        )
+        if category is None or any(
+            unit.asset_code == asset_code for unit in self._units
+        ):
+            return None
+        equipment = self.create_equipment(name, asset_code, category.name)
+        if equipment is None:
+            return None
+        return self.create_unit(
+            asset_code=asset_code,
+            equipment_id=equipment.id,
+            location=location,
+        )
 
     def create_unit(self, *, asset_code: str, equipment_id: str, location: str, status: str = "available") -> InventoryUnit | None:
         if any(unit.asset_code == asset_code for unit in self._units):
@@ -288,6 +350,10 @@ class FakeInventoryService:
             equipment_name=equipment_name,
             status=status,
             location=location,
+            category=next(
+                (item.category for item in self._equipment if item.id == equipment_id),
+                "",
+            ),
         )
         self._units.append(unit)
         return unit
@@ -306,6 +372,14 @@ class FakeInventoryService:
                 if unit.status != "available":
                     return None
                 target_status = "retired"
+            elif status == "lost_recovered":
+                if unit.status != "reported_lost" or not location:
+                    return None
+                target_status = "available"
+            elif status == "lost_closed":
+                if unit.status != "reported_lost":
+                    return None
+                target_status = "retired"
             else:
                 return None
             updated_unit = InventoryUnit(
@@ -314,9 +388,27 @@ class FakeInventoryService:
                 equipment_name=unit.equipment_name,
                 status=target_status,
                 location=location or unit.location,
+                category=unit.category,
                 note=reason,
             )
             self._units[index] = updated_unit
+            if status in {"lost_recovered", "lost_closed"}:
+                resolution = "recovered" if status == "lost_recovered" else "waived"
+                for case_index, case in enumerate(self._lost_cases):
+                    if case.asset_code == unit.asset_code and case.resolution is None:
+                        self._lost_cases[case_index] = LostCaseRecord(
+                            id=case.id,
+                            asset_code=case.asset_code,
+                            equipment_name=case.equipment_name,
+                            borrower_code=case.borrower_code,
+                            reported_at=case.reported_at,
+                            assessed_value="0",
+                            approved_compensation="0",
+                            resolution=resolution,
+                            approved_by_staff_code="SYSTEM",
+                            note=reason,
+                        )
+                        break
             return updated_unit
         return None
 
@@ -337,6 +429,7 @@ class FakeInventoryService:
                 equipment_name=unit.equipment_name,
                 status=status,
                 location=location or unit.location,
+                category=unit.category,
                 note=reason,
             )
             self._units[index] = updated
@@ -466,17 +559,52 @@ class FakeInventoryService:
             return confirmed
         return None
 
+    def create_and_confirm_borrow(self, *, borrower_code: str, staff_code: str, unit_ids: list[str], borrow_date: str, due_date: str, purpose: str) -> BorrowDraft | None:
+        if self.get_borrower(borrower_code) is None or self.get_staff(staff_code) is None:
+            return None
+        units = [self.get_unit_by_id(unit_id) for unit_id in unit_ids]
+        if not unit_ids or any(
+            unit is None or unit.status != "available" for unit in units
+        ):
+            return None
+
+        confirmed = BorrowDraft(
+            id=f"draft-{len(self._borrow_drafts) + 1}",
+            borrower_code=borrower_code,
+            staff_code=staff_code,
+            unit_ids=unit_ids,
+            borrow_date=borrow_date,
+            due_date=due_date,
+            purpose=purpose,
+            status="active",
+        )
+        for unit_id in unit_ids:
+            self._set_unit_state(unit_id, "borrowed", location="With Borrower")
+        self._borrow_drafts.append(confirmed)
+        self._loans.append(
+            LoanRecord(
+                id=f"loan-{len(self._loans) + 1}",
+                borrower_code=borrower_code,
+                staff_code=staff_code,
+                unit_ids=unit_ids,
+                borrow_date=borrow_date,
+                due_date=due_date,
+                purpose=purpose,
+            )
+        )
+        return confirmed
+
     def list_loans(self, *, filter_type: str | None = None) -> list[LoanRecord]:
         loans = list(self._loans)
         if filter_type == "today":
-            today = date.today()
+            today = bangkok_today()
             loans = [loan for loan in loans if date.fromisoformat(loan.due_date) == today]
         elif filter_type == "soon":
-            today = date.today()
+            today = bangkok_today()
             soon = today + timedelta(days=7)
             loans = [loan for loan in loans if today < date.fromisoformat(loan.due_date) <= soon]
         elif filter_type == "overdue":
-            today = date.today()
+            today = bangkok_today()
             loans = [loan for loan in loans if date.fromisoformat(loan.due_date) < today]
         elif filter_type == "partial":
             loans = [loan for loan in loans if loan.status == "partial"]

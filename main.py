@@ -15,10 +15,10 @@ from app.theme import (
 )
 
 from app.views.borrow_flow import BorrowFlowView
+from app.views.dashboard import DashboardView
 from app.views.history import build_history_view
 from app.views.inventory import build_inventory_view
 from app.views.loans import LoansView
-from app.views.lost_cases import LostCasesView
 from app.views.staff_borrowers import StaffBorrowersView
 
 
@@ -38,12 +38,12 @@ def get_service(services=None):
 
 def get_navigation_items():
     return [
-        {"label": "Inventory", "icon": ft.Icons.INVENTORY_2_OUTLINED},
-        {"label": "Staff", "icon": ft.Icons.PEOPLE_OUTLINED},
-        {"label": "Borrowers", "icon": ft.Icons.PERSON_OUTLINED},
-        {"label": "Loans", "icon": ft.Icons.RECEIPT_LONG_OUTLINED},
-        {"label": "Lost cases", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED},
-        {"label": "History", "icon": ft.Icons.HISTORY_OUTLINED},
+        {"label": "Dashboard", "icon": ft.Icons.DASHBOARD_OUTLINED},
+        {"label": "อุปกรณ์", "icon": ft.Icons.INVENTORY_2_OUTLINED},
+        {"label": "คนในระบบ", "icon": ft.Icons.PEOPLE_OUTLINED},
+        {"label": "ทำรายการยืม", "icon": ft.Icons.ASSIGNMENT_OUTLINED},
+        {"label": "คืนอุปกรณ์", "icon": ft.Icons.RECEIPT_LONG_OUTLINED},
+        {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED},
     ]
 
 
@@ -76,7 +76,7 @@ def build_app_shell(
         alignment=ft.Alignment.TOP_LEFT,
         bgcolor=COLOR_BG,
         content=build_screen(
-            build_inventory_view(service)
+            DashboardView(service)
         ),
     )
 
@@ -96,8 +96,8 @@ def build_app_shell(
                 ),
                 ft.Column(
                     controls=[
-                        ft.Text("LabEquip", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
-                        ft.Text("ระบบยืมอุปกรณ์", size=11, color=COLOR_SIDEBAR_TEXT),
+                        ft.Text("อุปกรณ์ห้องแล็บ", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE),
+                        ft.Text("ระบบยืม–คืนแบบง่าย", size=11, color=COLOR_SIDEBAR_TEXT),
                     ],
                     spacing=1,
                     tight=True,
@@ -109,70 +109,50 @@ def build_app_shell(
     )
 
     # ========================================================
-    # NAVIGATION RAIL
+    # SIDEBAR NAVIGATION
     # ========================================================
 
-    navigation = ft.NavigationRail(
-        selected_index=0,
-        label_type=ft.NavigationRailLabelType.ALL,
-        min_width=180,
-        min_extended_width=220,
-        bgcolor=COLOR_SIDEBAR_BG,
-        leading=brand_header,
-        indicator_color=ft.Colors.with_opacity(0.15, COLOR_SIDEBAR_ACTIVE),
-        selected_label_text_style=ft.TextStyle(
-            color=COLOR_SIDEBAR_ACTIVE,
-            weight=ft.FontWeight.BOLD,
-            size=12,
-        ),
-        unselected_label_text_style=ft.TextStyle(
-            color=COLOR_SIDEBAR_TEXT,
-            weight=ft.FontWeight.W_500,
-            size=12,
-        ),
-        destinations=[
-            ft.NavigationRailDestination(
-                icon=item["icon"],
-                selected_icon=item.get("selected_icon", item["icon"]),
-                label=item["label"],
-            )
-            for item in NAVIGATION_ITEMS
-        ],
-    )
+    menu_tiles: list[ft.ListTile] = []
 
     # ========================================================
     # NAVIGATION EVENT
     # ========================================================
 
-    def on_navigation_change(
-        e: ft.ControlEvent,
-    ) -> None:
+    def navigate_to(index: int) -> None:
+        mobile_navigation.selected_index = index
 
-        index = e.control.selected_index
+        for tile_index, tile in enumerate(menu_tiles):
+            is_selected = tile_index == index
+            tile.selected = is_selected
+            tile.leading.icon = NAVIGATION_ITEMS[tile_index].get(
+                "selected_icon" if is_selected else "icon",
+                NAVIGATION_ITEMS[tile_index]["icon"],
+            )
+            tile.title.weight = ft.FontWeight.BOLD if is_selected else ft.FontWeight.W_500
 
         if index == 0:
             content_area.content = build_screen(
-                build_inventory_view(service)
+                DashboardView(service)
             )
 
         elif index == 1:
             content_area.content = build_screen(
-                StaffBorrowersView(service)
+                build_inventory_view(service)
             )
 
         elif index == 2:
             content_area.content = build_screen(
-                BorrowFlowView(service)
+                StaffBorrowersView(service)
             )
 
         elif index == 3:
             content_area.content = build_screen(
-                LoansView(service)
+                BorrowFlowView(service)
             )
 
         elif index == 4:
             content_area.content = build_screen(
-                LostCasesView(service)
+                LoansView(service)
             )
 
         elif index == 5:
@@ -182,12 +162,44 @@ def build_app_shell(
 
         else:
             content_area.content = build_screen(
-                build_inventory_view(service)
+                DashboardView(service)
             )
 
+        update_control(navigation_menu)
         update_control(content_area)
 
-    navigation.on_change = on_navigation_change
+    menu_tiles.extend(
+        ft.ListTile(
+            leading=ft.Icon(
+                item.get("selected_icon", item["icon"]) if index == 0 else item["icon"],
+                size=20,
+            ),
+            title=ft.Text(
+                item["label"],
+                size=13,
+                weight=ft.FontWeight.BOLD if index == 0 else ft.FontWeight.W_500,
+            ),
+            selected=index == 0,
+            selected_color=COLOR_SIDEBAR_ACTIVE,
+            selected_tile_color=ft.Colors.with_opacity(0.12, COLOR_SIDEBAR_ACTIVE),
+            icon_color=COLOR_SIDEBAR_TEXT,
+            text_color=COLOR_SIDEBAR_TEXT,
+            hover_color=ft.Colors.with_opacity(0.08, COLOR_SIDEBAR_ACTIVE),
+            shape=ft.RoundedRectangleBorder(radius=12),
+            content_padding=ft.Padding.symmetric(horizontal=12),
+            horizontal_spacing=12,
+            min_leading_width=20,
+            min_height=48,
+            on_click=lambda e, index=index: navigate_to(index),
+        )
+        for index, item in enumerate(NAVIGATION_ITEMS)
+    )
+
+    navigation_menu = ft.Column(
+        controls=menu_tiles,
+        spacing=4,
+        tight=True,
+    )
 
     mobile_navigation = ft.NavigationBar(
         selected_index=0,
@@ -201,7 +213,7 @@ def build_app_shell(
             )
             for item in NAVIGATION_ITEMS
         ],
-        on_change=on_navigation_change,
+        on_change=lambda e: navigate_to(e.control.selected_index),
     )
 
     # ========================================================
@@ -212,8 +224,12 @@ def build_app_shell(
         width=NAV_WIDTH,
         padding=12,
         bgcolor=COLOR_SIDEBAR_BG,
-        alignment=ft.Alignment.TOP_CENTER,
-        content=navigation,
+        alignment=ft.Alignment.TOP_LEFT,
+        content=ft.Column(
+            controls=[brand_header, navigation_menu],
+            spacing=8,
+            tight=True,
+        ),
     )
 
     # ========================================================
@@ -254,6 +270,7 @@ def apply_shell_width(shell: ft.Container, width: float | None) -> None:
     is_mobile = width <= 1023
     row.controls[0].visible = not is_mobile
     row.controls[1].visible = not is_mobile
+    row.controls[2].content.padding = 20 if is_mobile else 32
     mobile_navigation.visible = is_mobile
     update_control(shell)
 
@@ -280,7 +297,7 @@ def main(
 
     shell = build_app_shell(services)
     apply_shell_width(shell, page.width)
-    page.on_resized = lambda _: apply_shell_width(shell, page.width)
+    page.on_resize = lambda _: apply_shell_width(shell, page.width)
     page.add(ft.Container(expand=True, content=shell))
 
 

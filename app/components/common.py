@@ -12,6 +12,65 @@ def update_control(control: ft.Control) -> None:
             raise
 
 
+def open_dialog(owner: ft.Control, dialog: ft.AlertDialog) -> None:
+    """Open a dialog both on a mounted page and in view-model tests."""
+    try:
+        page = owner.page
+    except RuntimeError:
+        page = None
+    if page is not None:
+        page.show_dialog(dialog)
+    else:
+        dialog.open = True
+
+
+def close_dialog(owner: ft.Control, dialog: ft.AlertDialog) -> None:
+    """Close the active dialog without requiring the owner to be mounted."""
+    try:
+        page = owner.page
+    except RuntimeError:
+        page = None
+    if page is not None and dialog.open:
+        page.pop_dialog()
+    else:
+        dialog.open = False
+
+
+def build_form_dialog(
+    *,
+    title: str,
+    icon: str,
+    content: ft.Control,
+    save_label: str,
+    on_save: Callable[[ft.ControlEvent], None],
+    on_cancel: Callable[[ft.ControlEvent], None],
+) -> ft.AlertDialog:
+    return ft.AlertDialog(
+        modal=True,
+        title=ft.Row(
+            controls=[
+                ft.Icon(icon, color=ft.Colors.BLUE_600, size=22),
+                ft.Text(title, size=18, weight=ft.FontWeight.W_600),
+            ],
+            spacing=10,
+        ),
+        content=ft.Container(content=content, width=600),
+        actions=[
+            ft.TextButton("ยกเลิก", on_click=on_cancel),
+            ft.Button(
+                save_label,
+                icon=ft.Icons.SAVE,
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.BLUE_600,
+                on_click=on_save,
+            ),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+        shape=ft.RoundedRectangleBorder(radius=20),
+        scrollable=True,
+    )
+
+
 def build_status_chip(status: str, custom_label: str | None = None) -> ft.Container:
     theme_info = STATUS_THEMES.get(
         status.lower(),
@@ -83,6 +142,80 @@ def build_card(
     return card
 
 
+def build_filter_bar(
+    *,
+    search_control: ft.Control | None,
+    action_controls: list[ft.Control],
+    footer: ft.Control | None = None,
+    search_col: int | float = 5,
+) -> ft.Container:
+    """Build the shared search-left, filters-right toolbar used by list pages."""
+    toolbar_controls: list[ft.Control] = []
+    if search_control is not None:
+        toolbar_controls.append(
+            ft.Container(
+                content=search_control,
+                col={"xs": 12, "md": search_col},
+            )
+        )
+    toolbar_controls.append(
+        ft.Container(
+            content=ft.Row(
+                controls=action_controls,
+                spacing=12,
+                run_spacing=12,
+                wrap=True,
+                alignment=ft.MainAxisAlignment.END,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            col={"xs": 12, "md": 12 - search_col if search_control is not None else 12},
+            alignment=ft.Alignment.CENTER_RIGHT,
+        )
+    )
+    toolbar = ft.ResponsiveRow(
+        controls=toolbar_controls,
+        spacing=16,
+        run_spacing=12,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+    controls: list[ft.Control] = [toolbar]
+    if footer is not None:
+        controls.append(
+            ft.Row(
+                controls=[ft.Container(expand=True), footer],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+        )
+    return build_card(
+        content=ft.Column(controls=controls, spacing=10),
+        padding=16,
+    )
+
+
+def build_table_surface(
+    table: ft.DataTable,
+    *,
+    table_width: int = 1000,
+) -> ft.Container:
+    """Show a consistent full-width table surface with mobile horizontal scroll."""
+    table.width = table_width
+    surface = build_card(
+        ft.Row(
+            controls=[table],
+            scroll=ft.ScrollMode.AUTO,
+        ),
+        padding=12,
+    )
+    surface.width = float("inf")
+
+    def handle_size(e: ft.LayoutSizeChangeEvent) -> None:
+        table.width = max(e.width - 24, table_width)
+        update_control(table)
+
+    surface.on_size_change = handle_size
+    return surface
+
+
 def build_page_header(
     title: str,
     subtitle: str,
@@ -122,6 +255,8 @@ def build_page_header(
             controls=[header_left, action_control],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            wrap=True,
+            run_spacing=12,
         )
     else:
         content = header_left

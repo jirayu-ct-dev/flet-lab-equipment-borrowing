@@ -3,6 +3,7 @@ import flet as ft
 APP_TITLE = "Lab Equipment Borrowing"
 PAGE_PADDING = 32
 NAV_WIDTH = 279
+CONTROL_RADIUS = 12
 
 # Color Tokens
 COLOR_PRIMARY = ft.Colors.BLUE_600
@@ -94,10 +95,10 @@ STATUS_THEMES = {
 }
 
 NAVIGATION_ITEMS = [
-    {"label": "คลังอุปกรณ์", "icon": ft.Icons.INVENTORY_2_OUTLINED, "selected_icon": ft.Icons.INVENTORY_2, "route": "inventory"},
-    {"label": "เจ้าหน้าที่ & ผู้ยืม", "icon": ft.Icons.PEOPLE_OUTLINED, "selected_icon": ft.Icons.PEOPLE, "route": "staff_borrowers"},
-    {"label": "ยืมอุปกรณ์", "icon": ft.Icons.ASSIGNMENT_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT, "route": "borrow_flow"},
-    {"label": "สัญญายืม & คืน", "icon": ft.Icons.RECEIPT_LONG_OUTLINED, "selected_icon": ft.Icons.RECEIPT_LONG, "route": "loans"},
-    {"label": "กรณีสูญหาย", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED, "selected_icon": ft.Icons.REPORT_PROBLEM, "route": "lost_cases"},
-    {"label": "ประวัติการใช้งาน", "icon": ft.Icons.HISTORY_OUTLINED, "selected_icon": ft.Icons.HISTORY, "route": "history"},
+    {"label": "Dashboard", "icon": ft.Icons.DASHBOARD_OUTLINED, "selected_icon": ft.Icons.DASHBOARD, "route": "dashboard"},
+    {"label": "อุปกรณ์", "icon": ft.Icons.INVENTORY_2_OUTLINED, "selected_icon": ft.Icons.INVENTORY_2, "route": "inventory"},
+    {"label": "คนในระบบ", "icon": ft.Icons.PEOPLE_OUTLINED, "selected_icon": ft.Icons.PEOPLE, "route": "people"},
+    {"label": "ทำรายการยืม", "icon": ft.Icons.ASSIGNMENT_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT, "route": "borrow"},
+    {"label": "คืนอุปกรณ์", "icon": ft.Icons.RECEIPT_LONG_OUTLINED, "selected_icon": ft.Icons.RECEIPT_LONG, "route": "returns"},
+    {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED, "selected_icon": ft.Icons.HISTORY, "route": "history"},
 ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -29,13 +30,20 @@ from app.contracts import (
     UpdateBorrower,
     UpdateStaff,
 )
-from app.database import connection, initialize_database
+from app.database import (
+    bangkok_date,
+    bangkok_today,
+    connection,
+    initialize_database,
+    utc_now,
+)
 from app.errors import DomainError
 from app.services.fake_services import (
     BorrowDraft,
     BorrowerRecord,
     HistoryEvent,
     InventoryEquipment,
+    InventoryCategory,
     InventoryUnit,
     LocationRecord,
     LostCaseRecord,
@@ -52,7 +60,6 @@ from app.services.master_data import (
     SQLiteUnitService,
 )
 from app.services.returns import SQLiteReturnService
-from app.database import utc_now
 
 
 class SQLiteInventoryAdapter:
@@ -96,7 +103,7 @@ class SQLiteInventoryAdapter:
                 asset_code=row["asset_code"],
                 equipment_name=row["equipment_name"],
                 borrower_code=row["borrower_code"],
-                reported_at=row["reported_at"][:10],
+                reported_at=bangkok_date(row["reported_at"]).isoformat(),
                 assessed_value=row["assessed_value"],
                 approved_compensation=row["approved_compensation"],
                 resolution=row["resolution"],
@@ -143,7 +150,7 @@ class SQLiteInventoryAdapter:
         if resolution == "replaced":
             replacement = ReplacementUnit(
                 asset_code=replacement_asset_code or "",
-                acquired_at=date.today(),
+                acquired_at=bangkok_today(),
                 location_id=int(location_id or ""),
                 serial_number=replacement_serial_number or None,
                 purchase_price=(
@@ -180,6 +187,32 @@ class SQLiteInventoryAdapter:
     def list_equipment(self) -> list[InventoryEquipment]:
         return [self._equipment_view(item) for item in self.equipment.search()]
 
+    def list_categories(self) -> list[InventoryCategory]:
+        with connection(self.database_path) as database:
+            rows = database.execute(
+                "SELECT id, name FROM equipment_categories ORDER BY name COLLATE NOCASE"
+            ).fetchall()
+        return [
+            InventoryCategory(id=str(row["id"]), name=row["name"])
+            for row in rows
+        ]
+
+    def create_category(self, name: str) -> InventoryCategory | None:
+        cleaned_name = name.strip()
+        if not cleaned_name:
+            return None
+        try:
+            with connection(self.database_path) as database:
+                cursor = database.execute(
+                    "INSERT INTO equipment_categories(name) VALUES (?)",
+                    (cleaned_name,),
+                )
+                database.commit()
+                category_id = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return None
+        return InventoryCategory(id=str(category_id), name=cleaned_name)
+
     def list_locations(self) -> list[LocationRecord]:
         return [
             LocationRecord(
@@ -194,6 +227,16 @@ class SQLiteInventoryAdapter:
     def create_equipment(
         self, name: str, equipment_code: str, category: str
     ) -> InventoryEquipment | None:
+        category_record = next(
+            (
+                item
+                for item in self.list_categories()
+                if item.name.casefold() == category.casefold()
+            ),
+            None,
+        )
+        if category and category_record is None:
+            category_record = self.create_category(category)
         try:
             item = self.equipment.create(
                 CreateEquipment(
@@ -204,7 +247,37 @@ class SQLiteInventoryAdapter:
             )
         except DomainError:
             return None
+        if category_record is not None:
+            with connection(self.database_path) as database:
+                database.execute(
+                    "UPDATE equipment SET category_id = ? WHERE id = ?",
+                    (int(category_record.id), item.id),
+                )
+                database.commit()
         return self._equipment_view(item)
+
+    def create_inventory_item(
+        self,
+        *,
+        name: str,
+        category_id: str,
+        asset_code: str,
+        location: str,
+    ) -> InventoryUnit | None:
+        category = next(
+            (item for item in self.list_categories() if item.id == category_id),
+            None,
+        )
+        if category is None or self.get_unit_by_asset_code(asset_code) is not None:
+            return None
+        equipment = self.create_equipment(name, asset_code, category.name)
+        if equipment is None:
+            return None
+        return self.create_unit(
+            asset_code=asset_code,
+            equipment_id=equipment.id,
+            location=location,
+        )
 
     def list_units(self) -> list[InventoryUnit]:
         return self.search_units()
@@ -249,7 +322,7 @@ class SQLiteInventoryAdapter:
                 AcquireUnit(
                     asset_code=asset_code,
                     equipment_id=equipment_pk,
-                    acquired_at=date.today(),
+                    acquired_at=bangkok_today(),
                     current_location_id=location_id,
                     recorded_by_staff_id=staff_id,
                     reason="Created from inventory UI",
@@ -301,6 +374,37 @@ class SQLiteInventoryAdapter:
                         reason=reason or "Repair completed from inventory UI",
                     ),
                 )
+            elif status in {"lost_recovered", "lost_closed"}:
+                case_id = self._open_lost_case_id(unit_pk)
+                if case_id is None:
+                    return None
+                recovered = status == "lost_recovered"
+                if recovered and not location:
+                    return None
+                self.lost_cases.resolve_lost_case(
+                    case_id,
+                    ResolveLostCase(
+                        resolution=(
+                            LostResolution.RECOVERED
+                            if recovered
+                            else LostResolution.WAIVED
+                        ),
+                        assessed_value=Decimal("0"),
+                        approved_compensation=Decimal("0"),
+                        approved_by_staff_id=self._ensure_system_staff(),
+                        reason=reason or "Closed legacy lost record from inventory UI",
+                        note="จัดการข้อมูลแจ้งหายเดิมจากหน้าคลังอุปกรณ์",
+                        recovered_outcome=(
+                            ReturnOutcome.AVAILABLE if recovered else None
+                        ),
+                        location_id=(
+                            self._ensure_location(location or "")
+                            if recovered
+                            else None
+                        ),
+                    ),
+                )
+                unit = self.units.get(unit_pk)
             else:
                 return None
             return self._unit_view(unit)
@@ -366,6 +470,17 @@ class SQLiteInventoryAdapter:
         except (DomainError, ValueError):
             return None
 
+    def create_and_confirm_borrow(self, *, borrower_code: str, staff_code: str, unit_ids: list[str], borrow_date: str, due_date: str, purpose: str) -> BorrowDraft | None:
+        borrower = self._borrower_model(borrower_code)
+        staff = self._staff_model(staff_code)
+        if borrower is None or staff is None:
+            return None
+        try:
+            loan = self.loans.create_and_confirm(CreateDraftLoan(transaction_code=self._next_transaction_code(), borrower_id=borrower.id, recorded_by_staff_id=staff.id, borrow_date=date.fromisoformat(borrow_date), due_date=date.fromisoformat(due_date), unit_ids=tuple(int(value) for value in unit_ids), purpose=purpose or None))
+            return self._draft_view(loan)
+        except (DomainError, ValueError):
+            return None
+
     def confirm_borrow_draft(self, draft_id: str) -> BorrowDraft | None:
         try:
             return self._draft_view(self.loans.confirm_loan(int(draft_id)))
@@ -376,7 +491,7 @@ class SQLiteInventoryAdapter:
         with connection(self.database_path) as database:
             ids = [row["id"] for row in database.execute("SELECT id FROM borrow_transactions ORDER BY id DESC")]
         loans = [self._loan_view(self.loans.get(loan_id)) for loan_id in ids]
-        today = date.today()
+        today = bangkok_today()
         if filter_type == "today":
             loans = [loan for loan in loans if date.fromisoformat(loan.due_date) == today]
         elif filter_type == "soon":
@@ -505,7 +620,7 @@ class SQLiteInventoryAdapter:
             HistoryEvent(
                 id=row["event_id"],
                 event_type=row["event_type"],
-                event_date=row["occurred_at"][:10],
+                event_date=bangkok_date(row["occurred_at"]).isoformat(),
                 description=row["description"],
                 borrower_code=row["borrower_code"] or "",
                 staff_code=row["staff_code"] or "",
@@ -530,10 +645,14 @@ class SQLiteInventoryAdapter:
 
     def _unit_view(self, unit) -> InventoryUnit:
         equipment = self.equipment.get(unit.equipment_id)
-        location = "With Borrower"
+        location = (
+            "ยังไม่พบอุปกรณ์"
+            if unit.status is UnitStatus.REPORTED_LOST
+            else "อยู่กับผู้ยืม"
+        )
         if unit.current_location_id is not None:
             location = self.locations.get(unit.current_location_id).room
-        return InventoryUnit(id=str(unit.id), asset_code=unit.asset_code, equipment_name=equipment.name, status=unit.status.value, location=location, note=unit.note)
+        return InventoryUnit(id=str(unit.id), asset_code=unit.asset_code, equipment_name=equipment.name, status=unit.status.value, location=location, category=equipment.category or "", note=unit.note)
 
     @staticmethod
     def _equipment_view(item) -> InventoryEquipment:
@@ -599,6 +718,18 @@ class SQLiteInventoryAdapter:
         if existing:
             return existing.id
         return self.staff.create(CreateStaff(staff_code="SYSTEM", full_name="System Operator")).id
+
+    def _open_lost_case_id(self, unit_id: int) -> int | None:
+        with connection(self.database_path) as database:
+            row = database.execute(
+                """
+                SELECT id FROM lost_cases
+                WHERE equipment_unit_id = ? AND resolution IS NULL
+                ORDER BY id DESC LIMIT 1
+                """,
+                (unit_id,),
+            ).fetchone()
+        return row["id"] if row is not None else None
 
     def _next_transaction_code(self) -> str:
         with connection(self.database_path) as database:
