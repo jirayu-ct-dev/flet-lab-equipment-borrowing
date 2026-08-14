@@ -187,6 +187,46 @@ def test_acquire_is_atomic_and_records_adjustment(services) -> None:
     assert tuple(adjustment) == ("acquire", "Initial acquisition")
 
 
+def test_unit_search_matches_equipment_name_instead_of_only_code(services) -> None:
+    _, _, _, unit = _acquire_unit(services)
+
+    by_asset = services["units"].search(UnitFilter(query="UNIT-1"))
+    assert by_asset == [unit]
+
+    by_name = services["units"].search(UnitFilter(query="icroscope"))
+    assert by_name == [unit]
+
+
+def test_unit_search_filters_by_category(services) -> None:
+    location, equipment, staff = _create_references(services)
+    services["equipment"].update(
+        equipment.id,
+        UpdateEquipment(
+            name="Microscope",
+            category="Optics",
+            manufacturer=None,
+            model=None,
+            default_location_id=location.id,
+            purchase_price=None,
+            status=RecordStatus.ACTIVE,
+            description=None,
+        ),
+    )
+    unit = services["units"].acquire(
+        AcquireUnit(
+            asset_code="UNIT-1",
+            equipment_id=equipment.id,
+            acquired_at=date(2026, 8, 7),
+            current_location_id=location.id,
+            recorded_by_staff_id=staff.id,
+            reason="Initial acquisition",
+        )
+    )
+
+    assert services["units"].search(UnitFilter(category="Optics")) == [unit]
+    assert services["units"].search(UnitFilter(category="Other")) == []
+
+
 def test_duplicate_asset_code_rolls_back_second_adjustment(services) -> None:
     location, equipment, staff, _ = _acquire_unit(services)
 

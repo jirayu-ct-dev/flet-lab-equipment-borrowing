@@ -12,6 +12,7 @@ from app.theme import (
     COLOR_SIDEBAR_BG,
     COLOR_SIDEBAR_ACTIVE,
     COLOR_SIDEBAR_TEXT,
+    MOBILE_BREAKPOINT,
 )
 
 from app.views.borrow_flow import BorrowFlowView
@@ -62,9 +63,12 @@ def build_screen(
 
 def build_app_shell(
     services=None,
+    *,
+    width: float | None = None,
 ) -> ft.Control:
 
     service = get_service(services)
+    mobile = width is not None and width <= MOBILE_BREAKPOINT
 
     # ========================================================
     # CONTENT AREA
@@ -76,7 +80,7 @@ def build_app_shell(
         alignment=ft.Alignment.TOP_LEFT,
         bgcolor=COLOR_BG,
         content=build_screen(
-            DashboardView(service)
+            DashboardView(service, mobile=mobile)
         ),
     )
 
@@ -132,17 +136,17 @@ def build_app_shell(
 
         if index == 0:
             content_area.content = build_screen(
-                DashboardView(service)
+                DashboardView(service, mobile=mobile)
             )
 
         elif index == 1:
             content_area.content = build_screen(
-                build_inventory_view(service)
+                build_inventory_view(service, mobile=mobile)
             )
 
         elif index == 2:
             content_area.content = build_screen(
-                StaffBorrowersView(service)
+                StaffBorrowersView(service, mobile=mobile)
             )
 
         elif index == 3:
@@ -152,17 +156,17 @@ def build_app_shell(
 
         elif index == 4:
             content_area.content = build_screen(
-                LoansView(service)
+                LoansView(service, mobile=mobile)
             )
 
         elif index == 5:
             content_area.content = build_screen(
-                build_history_view(service)
+                build_history_view(service, mobile=mobile)
             )
 
         else:
             content_area.content = build_screen(
-                DashboardView(service)
+                DashboardView(service, mobile=mobile)
             )
 
         update_control(navigation_menu)
@@ -267,7 +271,7 @@ def apply_shell_width(shell: ft.Container, width: float | None) -> None:
     if width is None:
         return
     row, mobile_navigation = shell.content.controls
-    is_mobile = width <= 1023
+    is_mobile = width <= MOBILE_BREAKPOINT
     row.controls[0].visible = not is_mobile
     row.controls[1].visible = not is_mobile
     row.controls[2].content.padding = 20 if is_mobile else 32
@@ -295,7 +299,7 @@ def main(
 
     services = create_app_services()
 
-    shell = build_app_shell(services)
+    shell = build_app_shell(services, width=page.width)
     apply_shell_width(shell, page.width)
     page.on_resize = lambda _: apply_shell_width(shell, page.width)
     page.add(ft.Container(expand=True, content=shell))

@@ -1,5 +1,57 @@
 # AGENTS.md
 
+## Project: flet-lab-equipment-borrowing
+
+Flet (Python) web app for a lab-equipment borrowing system. SQLite backend, single
+user, no auth. **All UI copy is Thai** (labels, hints, toasts); domain code and
+status strings are English.
+
+### Commands
+
+```bash
+python -m pip install -r requirements-dev.txt   # deps: flet + pytest only (no lint/format config in repo)
+flet run --web --port 8550 main.py              # dev server; entrypoint is repo-root main.py
+python -m pytest                                # full suite; no pytest config, no conftest
+docker compose up --build -d                    # → http://localhost:8080
+```
+
+- Demo data: set `APP_SEED_DEMO=1` (Docker sets it by default). Seeding is idempotent
+  via the `app_seed_runs` table (`app/seed.py`); delete `data/lab_equipment.db` to reseed.
+- DB location: `APP_DB_PATH` env var; default is the relative `data/lab_equipment.db`.
+  Under `flet run`, the process CWD is `.flet/storage/data` (see `.flet/README.md`), so
+  the relative default lands elsewhere — set `APP_DB_PATH` for a predictable location.
+
+### Architecture & wiring
+
+- `main.py` builds the app shell and swaps `content_area.content` per nav tab; views in
+  `app/views/`.
+- Views consume one duck-typed service facade: `FakeInventoryService` (in-memory,
+  `app/services/fake_services.py`) or `SQLiteInventoryAdapter` (persistent,
+  `app/services/sqlite_adapter.py`), chosen by `create_app_services()`
+  (`app/services/container.py`). **Keep the fake and SQLite implementations in sync** —
+  changing one's API almost always means updating the other plus its tests.
+- Domain layer: `app/contracts.py` (dataclasses + runtime-checkable Protocols),
+  `app/repositories/` (raw SQL), `app/services/*.py` (domain logic), `app/errors.py`
+  (`DomainError` hierarchy the UI maps to user feedback).
+- Migrations are the `MIGRATIONS` tuple in `app/database.py`; `initialize_database()`
+  applies pending versions (tracked in `schema_migrations`). To add a migration, append
+  to the tuple — existing DBs must upgrade in place. `audit_logs` is append-only (triggers).
+- Times are persisted as UTC ISO strings ending in `Z`; calendar dates derive from
+  `Asia/Bangkok` via `bangkok_today()`/`bangkok_date()`. Never compare business dates
+  against raw timestamps.
+
+### Testing
+
+- `tests/` = view + fake-service unit tests (build flet controls, assert structure; no
+  server needed). `tests/integration/` = SQLite/migration/seed/service tests using
+  `tmp_path` DBs — never touch the real `data/`.
+- `tests/integration/test_seed.py` asserts exact demo row counts (50 units, 5 loans, ...);
+  update it when seed data changes.
+- Status strings are English in the domain (`available`, `borrowed`, ...); Thai display
+  labels live in `STATUS_THEMES` in `app/theme.py`.
+
+---
+
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.

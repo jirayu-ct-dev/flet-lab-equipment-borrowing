@@ -4,6 +4,7 @@ APP_TITLE = "ระบบยืม–คืนอุปกรณ์"
 PAGE_PADDING = 32
 NAV_WIDTH = 279
 CONTROL_RADIUS = 12
+MOBILE_BREAKPOINT = 1023
 
 # Color Tokens
 COLOR_PRIMARY = ft.Colors.BLUE_600

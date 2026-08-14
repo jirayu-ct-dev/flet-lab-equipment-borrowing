@@ -283,11 +283,15 @@ class SQLiteInventoryAdapter:
         return self.search_units()
 
     def search_units(
-        self, keyword: str | None = None, status: str | None = None
+        self,
+        keyword: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
     ) -> list[InventoryUnit]:
         filters = UnitFilter(
             query=keyword or None,
             status=UnitStatus(status) if status else None,
+            category=category or None,
         )
         return [self._unit_view(item) for item in self.units.search(filters)]
 

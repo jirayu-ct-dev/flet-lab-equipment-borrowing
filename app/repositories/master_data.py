@@ -430,20 +430,30 @@ class MasterDataRepository:
         clauses: list[str] = []
         values: list[object] = []
         if filters.query:
-            clauses.append("(asset_code LIKE ? OR serial_number LIKE ?)")
+            clauses.append(
+                "(eu.asset_code LIKE ? OR eu.serial_number LIKE ? "
+                "OR e.name LIKE ? OR e.category LIKE ? "
+                "OR e.model LIKE ? OR e.manufacturer LIKE ?)"
+            )
             pattern = f"%{filters.query}%"
-            values.extend([pattern, pattern])
+            values.extend([pattern, pattern, pattern, pattern, pattern, pattern])
         if filters.equipment_id is not None:
-            clauses.append("equipment_id = ?")
+            clauses.append("eu.equipment_id = ?")
             values.append(filters.equipment_id)
         if filters.location_id is not None:
-            clauses.append("current_location_id = ?")
+            clauses.append("eu.current_location_id = ?")
             values.append(filters.location_id)
         if filters.status:
-            clauses.append("status = ?")
+            clauses.append("eu.status = ?")
             values.append(filters.status.value)
+        if filters.category:
+            clauses.append("e.category = ?")
+            values.append(filters.category)
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         rows = self.database.execute(
-            f"SELECT * FROM equipment_units{where} ORDER BY asset_code", values
+            f"SELECT eu.* FROM equipment_units AS eu "
+            f"JOIN equipment AS e ON e.id = eu.equipment_id{where} "
+            f"ORDER BY eu.asset_code",
+            values,
         ).fetchall()
         return [_unit(row) for row in rows]

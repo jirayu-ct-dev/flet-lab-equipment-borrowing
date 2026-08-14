@@ -2,10 +2,13 @@ import flet as ft
 
 from app.components.common import (
     build_card,
+    build_card_list,
+    build_data_card,
     build_page_header,
     build_state_view,
     build_status_chip,
     build_table_surface,
+    handle_mobile_resize,
     update_control,
 )
 from app.services.fake_services import FakeInventoryService
@@ -16,6 +19,8 @@ class HistoryView(ft.Container):
     def __init__(
         self,
         service: FakeInventoryService | None = None,
+        *,
+        mobile: bool = False,
     ) -> None:
         super().__init__(
             expand=True,
@@ -23,6 +28,8 @@ class HistoryView(ft.Container):
         )
 
         self.service = service or FakeInventoryService()
+        self.mobile = mobile
+        self._table_width: float | None = None
 
         # --------------------------------------------------
         # Search fields
@@ -79,7 +86,7 @@ class HistoryView(ft.Container):
         )
 
         self.clear_button = ft.OutlinedButton(
-            "ล้างตัวกรอง",
+            "รีเฟรช",
             icon=ft.Icons.CLEAR_ALL,
             style=ft.ButtonStyle(
                 padding=ft.Padding(left=16, top=12, right=16, bottom=12),
@@ -103,6 +110,7 @@ class HistoryView(ft.Container):
         )
 
         self._build_view()
+        self.on_size_change = self._handle_resize
 
     # ======================================================
     # BUILD
@@ -227,6 +235,29 @@ class HistoryView(ft.Container):
             )
             return
 
+        if self.mobile:
+            self.history_container.content = build_card_list(
+                [
+                    build_data_card(
+                        title=getattr(event, "description", "") or "-",
+                        icon=ft.Icons.HISTORY,
+                        status=(
+                            getattr(event, "event_type", ""),
+                            self._translate_event_type(getattr(event, "event_type", "")),
+                        ),
+                        fields=[
+                            ("วันที่", getattr(event, "event_date", "") or "-"),
+                            ("ผู้ยืม", getattr(event, "borrower_code", "") or "-"),
+                            ("ผู้บันทึก", getattr(event, "staff_code", "") or "-"),
+                            ("อุปกรณ์", getattr(event, "equipment_name", "") or "-"),
+                            ("รหัสอุปกรณ์", getattr(event, "asset_code", "") or "-"),
+                        ],
+                    )
+                    for event in events
+                ]
+            )
+            return
+
         table = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text("วันที่"), expand=2),
@@ -259,7 +290,9 @@ class HistoryView(ft.Container):
             column_spacing=24,
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
-        self.history_container.content = build_table_surface(table, table_width=1250)
+        self.history_container.content = build_table_surface(
+            table, table_width=1250, initial_width=self._table_width
+        )
 
     # ======================================================
     # TRANSLATE EVENT
@@ -294,6 +327,10 @@ class HistoryView(ft.Container):
     # ======================================================
     # SEARCH
     # ======================================================
+
+    def _handle_resize(self, e: ft.LayoutSizeChangeEvent) -> None:
+        self._table_width = e.width
+        handle_mobile_resize(self, self._render_history, e)
 
     def _handle_search(
         self,
@@ -338,6 +375,8 @@ class HistoryView(ft.Container):
 
 def build_history_view(
     service: FakeInventoryService | None = None,
+    *,
+    mobile: bool = False,
 ) -> ft.Control:
 
-    return HistoryView(service)
+    return HistoryView(service, mobile=mobile)

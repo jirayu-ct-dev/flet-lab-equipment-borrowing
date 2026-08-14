@@ -1,6 +1,6 @@
 from typing import Callable, Any
 import flet as ft
-from app.theme import STATUS_THEMES, COLOR_BORDER, COLOR_SURFACE, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
+from app.theme import STATUS_THEMES, COLOR_BORDER, COLOR_SURFACE, COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, MOBILE_BREAKPOINT
 
 
 def update_control(control: ft.Control) -> None:
@@ -106,6 +106,116 @@ def build_status_chip(status: str, custom_label: str | None = None) -> ft.Contai
     )
 
 
+def build_data_card(
+    *,
+    title: str,
+    icon: str | None = None,
+    status: tuple[str, str] | None = None,
+    fields: list[tuple[str, str]] | None = None,
+    actions: list[ft.Control] | None = None,
+    header_actions: list[ft.Control] | None = None,
+    full_width_fields: list[str] | None = None,
+) -> ft.Container:
+    """Record card used on mobile in place of a DataTable row."""
+    header_controls: list[ft.Control] = []
+    if icon is not None:
+        header_controls.append(ft.Icon(icon, size=18, color=ft.Colors.BLUE_600))
+    header_controls.append(
+        ft.Text(
+            title,
+            size=15,
+            weight=ft.FontWeight.BOLD,
+            color=COLOR_TEXT_PRIMARY,
+            expand=True,
+        )
+    )
+    if status is not None:
+        header_controls.append(build_status_chip(status[0], status[1]))
+    header_controls.extend(header_actions or [])
+
+    rows: list[ft.Control] = [
+        ft.Row(
+            controls=header_controls,
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+    ]
+
+    def build_cell(label: str, value: str) -> ft.Control:
+        return ft.Column(
+            controls=[
+                ft.Text(label, size=11, color=COLOR_TEXT_SECONDARY),
+                ft.Text(
+                    value or "-",
+                    size=14,
+                    weight=ft.FontWeight.W_500,
+                    color=COLOR_TEXT_PRIMARY,
+                ),
+            ],
+            spacing=2,
+            tight=True,
+        )
+
+    def build_pair_row(pair: list[ft.Control]) -> ft.Row:
+        return ft.Row(
+            controls=[ft.Container(content=cell, expand=True) for cell in pair],
+            spacing=12,
+            vertical_alignment=ft.CrossAxisAlignment.START,
+        )
+
+    full_width = set(full_width_fields or [])
+    pair: list[ft.Control] = []
+    for label, value in fields or []:
+        cell = build_cell(label, value)
+        if label in full_width:
+            if pair:
+                rows.append(build_pair_row(pair))
+                pair = []
+            rows.append(cell)
+        else:
+            pair.append(cell)
+            if len(pair) == 2:
+                rows.append(build_pair_row(pair))
+                pair = []
+    if pair:
+        rows.append(build_pair_row(pair))
+
+    if actions:
+        rows.append(ft.Divider(height=1, thickness=1, color=COLOR_BORDER))
+        rows.append(
+            ft.Row(
+                controls=actions,
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+        )
+
+    return build_card(content=ft.Column(controls=rows, spacing=10), padding=16)
+
+
+def build_card_list(controls: list[ft.Control]) -> ft.Column:
+    """Stack record cards vertically for mobile list views."""
+    return ft.Column(
+        controls=controls,
+        spacing=12,
+        expand=True,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+    )
+
+
+def handle_mobile_resize(
+    view: ft.Control,
+    rerender: Callable[[], None],
+    e: ft.LayoutSizeChangeEvent,
+) -> None:
+    """Flip a view's table/card rendering when width crosses the mobile breakpoint."""
+    mobile = e.width <= MOBILE_BREAKPOINT
+    if mobile != view.mobile:
+        view.mobile = mobile
+        rerender()
+        update_control(view)
+
+
 def build_card(
     content: ft.Control,
     *,
@@ -196,9 +306,21 @@ def build_table_surface(
     table: ft.DataTable,
     *,
     table_width: int = 1000,
+    initial_width: float | None = None,
 ) -> ft.Container:
-    """Show a consistent full-width table surface with mobile horizontal scroll."""
-    table.width = table_width
+    """Show a consistent full-width table surface with mobile horizontal scroll.
+
+    ``initial_width`` is the last known rendered width of the surface (e.g. from
+    the owning view's resize handler). It lets a freshly rebuilt table keep its
+    responsive full-width layout immediately, instead of waiting for an
+    ``on_size_change`` event that does not re-fire when a same-size surface
+    replaces another one.
+    """
+    table.width = (
+        max(initial_width - 24, table_width)
+        if initial_width is not None
+        else table_width
+    )
     surface = build_card(
         ft.Row(
             controls=[table],

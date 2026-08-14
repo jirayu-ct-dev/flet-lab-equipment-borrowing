@@ -436,13 +436,30 @@ class FakeInventoryService:
             return updated
         return None
 
-    def search_units(self, keyword: str | None = None, status: str | None = None) -> list[InventoryUnit]:
+    def search_units(
+        self,
+        keyword: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
+    ) -> list[InventoryUnit]:
         results = list(self._units)
         if keyword:
             keyword = keyword.lower()
-            results = [unit for unit in results if keyword in unit.equipment_name.lower() or keyword in unit.asset_code.lower()]
+            results = [
+                unit
+                for unit in results
+                if keyword in unit.equipment_name.lower()
+                or keyword in unit.asset_code.lower()
+                or keyword in (unit.category or "").lower()
+            ]
         if status:
             results = [unit for unit in results if unit.status == status]
+        if category:
+            results = [
+                unit
+                for unit in results
+                if (unit.category or "").casefold() == category.casefold()
+            ]
         return results
 
     def list_staff(self, *, include_inactive: bool = False) -> list[StaffRecord]:

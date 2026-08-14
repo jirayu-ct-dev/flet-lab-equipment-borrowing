@@ -36,6 +36,25 @@ def test_history_view_renders_events_as_table() -> None:
     assert table.columns[0].label.value == "วันที่"
 
 
+def test_history_view_renders_events_as_cards_on_mobile() -> None:
+    view = HistoryView(FakeInventoryService(), mobile=True)
+
+    content = view.history_container.content
+    assert isinstance(content, ft.Column)
+    assert len(content.controls) == 2
+    assert all(isinstance(card, ft.Container) for card in content.controls)
+
+
+def test_history_clear_keeps_table_responsive_width() -> None:
+    view = HistoryView(FakeInventoryService())
+    view._handle_resize(type("Size", (), {"width": 1600})())
+
+    view._handle_clear(None)
+
+    table = view.history_container.content.content.controls[0]
+    assert table.width == 1576
+
+
 def test_history_filter_uses_original_multi_row_layout() -> None:
     view = HistoryView(FakeInventoryService())
 
@@ -54,4 +73,4 @@ def test_history_filter_uses_original_multi_row_layout() -> None:
     ]
     assert button_row.controls == [view.search_button, view.clear_button]
     assert view.search_button.content == "ค้นหาประวัติ"
-    assert view.clear_button.content == "ล้างตัวกรอง"
+    assert view.clear_button.content == "รีเฟรช"

@@ -2,8 +2,11 @@ import flet as ft
 
 from app.components.common import (
     build_card,
+    build_card_list,
+    build_data_card,
     build_form_dialog,
     close_dialog,
+    handle_mobile_resize,
     open_dialog,
     update_control,
 )
@@ -14,9 +17,15 @@ from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
 class DashboardView(ft.Container):
     """Inventory overview with three direct management actions."""
 
-    def __init__(self, service: FakeInventoryService | None = None) -> None:
+    def __init__(
+        self,
+        service: FakeInventoryService | None = None,
+        *,
+        mobile: bool = False,
+    ) -> None:
         super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
+        self.mobile = mobile
 
         self.metric_values = {
             status: ft.Text(
@@ -89,6 +98,7 @@ class DashboardView(ft.Container):
         self._build_view()
         self._refresh_metrics()
         self._refresh_table()
+        self.on_size_change = self._handle_resize
 
     def _build_dialogs(self) -> None:
         self.category_dialog = build_form_dialog(
@@ -156,8 +166,44 @@ class DashboardView(ft.Container):
             on_cancel=lambda e: close_dialog(self, self.manage_dialog),
         )
 
-    def _build_view(self) -> None:
-        top_actions = ft.Row(
+    def _build_top_actions(self) -> ft.Row:
+        if self.mobile:
+            return ft.Row(
+                controls=[
+                    ft.OutlinedButton(
+                        "เพิ่มหมวด",
+                        height=44,
+                        expand=True,
+                        style=ft.ButtonStyle(
+                            padding=ft.Padding.symmetric(horizontal=8),
+                        ),
+                        on_click=self._open_category_dialog,
+                    ),
+                    ft.OutlinedButton(
+                        "เพิ่มอุปกรณ์",
+                        height=44,
+                        expand=True,
+                        style=ft.ButtonStyle(
+                            padding=ft.Padding.symmetric(horizontal=8),
+                        ),
+                        on_click=self._open_equipment_dialog,
+                    ),
+                    ft.Button(
+                        "จัดการ",
+                        height=44,
+                        expand=True,
+                        color=ft.Colors.WHITE,
+                        bgcolor=ft.Colors.BLUE_600,
+                        style=ft.ButtonStyle(
+                            padding=ft.Padding.symmetric(horizontal=8),
+                        ),
+                        on_click=self._open_manage_dialog,
+                    ),
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.END,
+            )
+        return ft.Row(
             controls=[
                 ft.OutlinedButton(
                     "เพิ่มหมวดหมู่",
@@ -186,6 +232,9 @@ class DashboardView(ft.Container):
             alignment=ft.MainAxisAlignment.END,
             tight=True,
         )
+
+    def _build_view(self) -> None:
+        top_actions = self._build_top_actions()
         header_left = ft.Row(
             controls=[
                 ft.Container(
@@ -227,7 +276,7 @@ class DashboardView(ft.Container):
         summary = ft.ResponsiveRow(
             controls=[
                 ft.Container(
-                    col={"sm": 6, "md": 3},
+                    col={"xs": 6, "sm": 6, "md": 3},
                     content=build_card(
                         ft.Column(
                             controls=[
@@ -285,6 +334,24 @@ class DashboardView(ft.Container):
                 alignment=ft.Alignment.CENTER,
             )
             return
+        if self.mobile:
+            self.inventory_table = None
+            self.table_container.content = build_card_list(
+                [
+                    build_data_card(
+                        title=unit.asset_code,
+                        icon=ft.Icons.INVENTORY_2_OUTLINED,
+                        status=(unit.status, self._status_label(unit.status)),
+                        fields=[
+                            ("ชื่ออุปกรณ์", unit.equipment_name),
+                            ("หมวดหมู่", unit.category or "-"),
+                            ("ตำแหน่ง", unit.location),
+                        ],
+                    )
+                    for unit in units
+                ]
+            )
+            return
         table = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text("รหัสอุปกรณ์"), expand=2),
@@ -321,6 +388,9 @@ class DashboardView(ft.Container):
             return
         self.inventory_table.width = max(e.width, 900)
         update_control(self.inventory_table)
+
+    def _handle_resize(self, e: ft.LayoutSizeChangeEvent) -> None:
+        handle_mobile_resize(self, self._refresh_table, e)
 
     def _handle_category_dropdown_size(self, e: ft.LayoutSizeChangeEvent) -> None:
         self._handle_dropdown_size(self.equipment_category, e)

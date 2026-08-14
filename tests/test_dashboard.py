@@ -47,6 +47,27 @@ def test_dashboard_shows_inventory_table() -> None:
     assert [column.expand for column in table.columns] == [2, 3, 2, 2, 3]
 
 
+def test_dashboard_shows_inventory_cards_on_mobile() -> None:
+    view = DashboardView(FakeInventoryService(), mobile=True)
+
+    content = view.table_container.content
+    assert isinstance(content, ft.Column)
+    assert len(content.controls) == 5
+    assert all(isinstance(card, ft.Container) for card in content.controls)
+
+
+def test_dashboard_switches_table_and_cards_across_breakpoint() -> None:
+    view = DashboardView(FakeInventoryService())
+
+    assert isinstance(view.table_container.content, ft.Row)
+
+    view._handle_resize(type("Size", (), {"width": 430})())
+    assert isinstance(view.table_container.content, ft.Column)
+
+    view._handle_resize(type("Size", (), {"width": 1440})())
+    assert isinstance(view.table_container.content, ft.Row)
+
+
 def test_dashboard_header_contains_three_wrapping_actions() -> None:
     view = DashboardView(FakeInventoryService())
     header = view.content.controls[0]
@@ -54,6 +75,31 @@ def test_dashboard_header_contains_three_wrapping_actions() -> None:
 
     assert len(actions.controls) == 3
     assert actions.wrap is True
+
+
+def test_dashboard_mobile_actions_sit_in_one_row_with_short_labels() -> None:
+    view = DashboardView(FakeInventoryService(), mobile=True)
+    header = view.content.controls[0]
+    actions = header.content.controls[1].content
+
+    assert isinstance(actions, ft.Row)
+    assert len(actions.controls) == 3
+    assert actions.wrap is False
+    assert [action.content for action in actions.controls] == [
+        "เพิ่มหมวด",
+        "เพิ่มอุปกรณ์",
+        "จัดการ",
+    ]
+    assert all(action.expand is True for action in actions.controls)
+
+
+def test_dashboard_mobile_summary_uses_two_columns() -> None:
+    view = DashboardView(FakeInventoryService(), mobile=True)
+    summary = view.content.controls[1]
+
+    assert isinstance(summary, ft.ResponsiveRow)
+    assert len(summary.controls) == 4
+    assert all(card.col["xs"] == 6 for card in summary.controls)
 
 
 def test_dashboard_table_fills_desktop_and_keeps_mobile_minimum_width() -> None:

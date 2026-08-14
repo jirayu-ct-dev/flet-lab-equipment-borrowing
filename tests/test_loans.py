@@ -57,17 +57,67 @@ def test_loans_view_renders_returnable_loans_as_table() -> None:
     assert table.rows[0].cells[-1].content.content == "บันทึกการคืน"
 
 
+def test_loans_view_renders_loans_as_cards_on_mobile() -> None:
+    view = LoansView(FakeInventoryService(), mobile=True)
+
+    content = view.loan_container.content
+    assert isinstance(content, ft.Column)
+    assert len(content.controls) == 1
+    assert isinstance(content.controls[0], ft.Container)
+
+
+def test_loans_mobile_card_keeps_action_out_of_header_and_readable() -> None:
+    view = LoansView(FakeInventoryService(), mobile=True)
+    loan = view.service.get_loan("loan-1")
+
+    rows = view.loan_container.content.controls[0].content.controls
+
+    header = rows[0]
+    assert isinstance(header, ft.Row)
+    assert isinstance(header.controls[0], ft.Icon)
+    assert isinstance(header.controls[1], ft.Text)
+    assert header.controls[1].value == f"รายการยืม {loan.id}"
+    assert isinstance(header.controls[-1], ft.Container)
+
+    first_grid = rows[1]
+    assert isinstance(first_grid, ft.Row)
+    first_cell = first_grid.controls[0].content.controls
+    assert first_cell[0].value == "ครบกำหนด"
+    assert first_cell[1].value == loan.due_date
+    second_cell = first_grid.controls[1].content.controls
+    assert second_cell[0].value == "คืนแล้ว"
+
+    footer = rows[-1]
+    assert isinstance(footer, ft.Row)
+    button = footer.controls[0]
+    assert isinstance(button, ft.Button)
+    assert button.content == "บันทึกการคืน"
+    assert button.expand is True
+
+
+def test_loans_view_switches_table_and_cards_across_breakpoint() -> None:
+    view = LoansView(FakeInventoryService())
+
+    assert isinstance(view.loan_container.content.content.controls[0], ft.DataTable)
+
+    view._handle_resize(type("Size", (), {"width": 430})())
+    assert isinstance(view.loan_container.content, ft.Column)
+
+    view._handle_resize(type("Size", (), {"width": 1440})())
+    assert isinstance(view.loan_container.content.content.controls[0], ft.DataTable)
+
+
 def test_loans_view_uses_full_width_filter_and_stacked_return_fields() -> None:
     view = LoansView(FakeInventoryService())
 
-    filter_layout = view.content.controls[1].content.controls[0]
-    assert isinstance(filter_layout, ft.ResponsiveRow)
-    assert filter_layout.controls[0].content is view.search_field
-    filter_actions = filter_layout.controls[1].content.controls
-    assert filter_actions[0] is view.filter_dropdown_row
-    refresh_button = filter_actions[1]
-    assert refresh_button.content == "รีเฟรชข้อมูล"
-    assert view.filter_dropdown_row.width == 320
+    filter_column = view.content.controls[1].content
+    assert filter_column.controls[0] is view.search_field
+    filter_row = filter_column.controls[1]
+    assert isinstance(filter_row, ft.Row)
+    assert filter_row.controls[0] is view.filter_dropdown
+    refresh_button = filter_row.controls[1]
+    assert refresh_button.content == "รีเฟรช"
+    assert refresh_button.height == 52
     assert view.filter_dropdown.expand is True
     assert view.filter_dropdown.border_radius == 12
     assert refresh_button.style.shape.radius == 12
@@ -90,6 +140,16 @@ def test_loans_view_uses_full_width_filter_and_stacked_return_fields() -> None:
             view.return_location_dropdown,
         )
     )
+
+
+def test_loans_refresh_keeps_table_responsive_width() -> None:
+    view = LoansView(FakeInventoryService())
+    view._handle_resize(type("Size", (), {"width": 1600})())
+
+    view._handle_refresh(None)
+
+    table = view.loan_container.content.content.controls[0]
+    assert table.width == 1576
 
 
 def test_loans_view_searches_by_loan_or_borrower_code() -> None:

@@ -13,6 +13,18 @@ def test_search_units_filters_by_keyword() -> None:
     assert all("microscope" in unit.equipment_name.lower() for unit in results)
 
 
+def test_search_units_filters_by_category() -> None:
+    service = FakeInventoryService()
+
+    results = service.search_units(category="Research")
+
+    assert results
+    assert all(unit.category == "Research" for unit in results)
+
+    combined = service.search_units(keyword="laptop", category="IT")
+    assert {unit.asset_code for unit in combined} == {"AST-002", "AST-005"}
+
+
 def test_create_equipment_and_unit_updates_service_state() -> None:
     service = FakeInventoryService()
 

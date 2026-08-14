@@ -303,6 +303,7 @@ class UnitFilter:
     equipment_id: int | None = None
     location_id: int | None = None
     status: UnitStatus | None = None
+    category: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

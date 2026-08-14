@@ -18,6 +18,16 @@ def test_build_app_shell_returns_container() -> None:
     assert isinstance(shell, ft.Container)
 
 
+def test_app_shell_builds_views_in_mobile_mode_from_width() -> None:
+    mobile_shell = build_app_shell(width=430)
+    mobile_dashboard = mobile_shell.content.controls[0].controls[2].content.content
+    assert mobile_dashboard.mobile is True
+
+    desktop_shell = build_app_shell(width=1440)
+    desktop_dashboard = desktop_shell.content.controls[0].controls[2].content.content
+    assert desktop_dashboard.mobile is False
+
+
 def test_desktop_navigation_uses_horizontal_icon_and_label_layout() -> None:
     shell = build_app_shell()
     sidebar_content = shell.content.controls[0].controls[0].content
