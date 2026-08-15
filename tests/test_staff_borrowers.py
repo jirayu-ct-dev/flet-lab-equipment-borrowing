@@ -2,6 +2,7 @@ import flet as ft
 
 from app.services.fake_services import FakeInventoryService
 from app.views.staff_borrowers import StaffBorrowersView
+from tests.test_auth_fixtures import admin_user
 
 
 def test_staff_and_borrower_service_support_lookup_and_status() -> None:
@@ -27,7 +28,7 @@ class RejectingPeopleService(FakeInventoryService):
 
 
 def test_staff_form_keeps_values_when_save_fails() -> None:
-    view = StaffBorrowersView(RejectingPeopleService())
+    view = StaffBorrowersView(RejectingPeopleService(), current_user=admin_user())
     view._open_new_staff(None)
     view.staff_code.value = "ST-FAIL"
     view.staff_name.value = "ทดสอบ"
@@ -41,7 +42,7 @@ def test_staff_form_keeps_values_when_save_fails() -> None:
 
 
 def test_borrower_form_keeps_values_when_save_fails() -> None:
-    view = StaffBorrowersView(RejectingPeopleService())
+    view = StaffBorrowersView(RejectingPeopleService(), current_user=admin_user())
     view._open_new_borrower(None)
     view.borrower_code.value = "BR-FAIL"
     view.borrower_name.value = "ทดสอบ"

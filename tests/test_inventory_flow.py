@@ -1,5 +1,6 @@
 from app.services.fake_services import FakeInventoryService
 from app.views.dashboard import DashboardView
+from tests.test_auth_fixtures import admin_user
 
 
 def test_search_units_supports_status_filter() -> None:
@@ -49,7 +50,7 @@ def test_complete_repair_requires_maintenance_unit() -> None:
 
 def test_inventory_view_creates_unit_for_selected_equipment() -> None:
     service = FakeInventoryService()
-    view = DashboardView(service)
+    view = DashboardView(service, current_user=admin_user())
     view.equipment_name.value = "จอคอม"
     view.equipment_category.value = "category-1"
     view.equipment_asset_code.value = "AST-009"

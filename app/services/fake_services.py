@@ -1,9 +1,27 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date, timedelta
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timedelta
 
-from app.database import bangkok_today
+from app.contracts import (
+    AppUser,
+    ChangePasswordCommand,
+    CreateUserCommand,
+    LoginCommand,
+    RecordStatus,
+    RegisterLineUser,
+    Role,
+)
+from app.database import bangkok_today, utc_now
+from app.errors import AuthenticationError, DuplicateCodeError, NotFoundError
+from app.security import hash_password
+from app.services.auth_service import (
+    INACTIVE_USER_MESSAGE,
+    WRONG_CREDENTIALS_MESSAGE,
+    apply_change_password,
+    check_manage_users,
+    verify_login,
+)
 
 
 @dataclass(frozen=True)
@@ -627,6 +645,18 @@ class FakeInventoryService:
             loans = [loan for loan in loans if loan.status == "partial"]
         return loans
 
+    def list_loans_for_borrower(
+        self, borrower_id: int, *, filter_type: str | None = None
+    ) -> list[LoanRecord]:
+        if not 1 <= borrower_id <= len(self._borrowers):
+            return []
+        borrower = self._borrowers[borrower_id - 1]
+        return [
+            loan
+            for loan in self.list_loans(filter_type=filter_type)
+            if loan.borrower_code == borrower.borrower_code
+        ]
+
     def get_loan(self, loan_id: str) -> LoanRecord | None:
         return next((loan for loan in self._loans if loan.id == loan_id), None)
 
@@ -671,3 +701,163 @@ class FakeInventoryService:
             if unit.id == unit_id:
                 return unit
         return None
+
+
+class FakeAuthService:
+    def __init__(self) -> None:
+        self._next_id = 2
+        self._users: list[AppUser] = [
+            AppUser(
+                id=1,
+                role=Role.ADMIN,
+                display_name="ผู้ดูแลระบบ",
+                email="admin@lab.local",
+                staff_id=None,
+                borrower_id=None,
+                status=RecordStatus.ACTIVE,
+                must_change_password=True,
+                last_login_at=None,
+            ),
+            AppUser(
+                id=2,
+                role=Role.USER,
+                display_name="ผู้ยืมทดสอบ",
+                email="borrower@lab.local",
+                staff_id=None,
+                borrower_id=None,
+                status=RecordStatus.ACTIVE,
+                must_change_password=False,
+                last_login_at=None,
+            ),
+        ]
+        self._passwords: dict[int, str] = {
+            1: hash_password("admin123"),
+            2: hash_password("borrow123"),
+        }
+        self._line_subs: dict[int, str] = {}
+
+    def authenticate(self, command: LoginCommand) -> AppUser:
+        identity = command.identity.strip().casefold()
+        user = next(
+            (
+                candidate
+                for candidate in self._users
+                if candidate.email is not None
+                and candidate.email.casefold() == identity
+            ),
+            None,
+        )
+        if user is None:
+            raise AuthenticationError(WRONG_CREDENTIALS_MESSAGE)
+        verify_login(command.password, self._passwords.get(user.id))
+        if user.status is not RecordStatus.ACTIVE:
+            raise AuthenticationError(INACTIVE_USER_MESSAGE)
+        logged_in = replace(user, last_login_at=utc_now())
+        self._users = [
+            logged_in if candidate.id == user.id else candidate
+            for candidate in self._users
+        ]
+        return logged_in
+
+    def get(self, user_id: int) -> AppUser | None:
+        return next(
+            (candidate for candidate in self._users if candidate.id == user_id), None
+        )
+
+    def find_by_line_sub(self, line_sub: str) -> AppUser | None:
+        user_id = next(
+            (
+                candidate_id
+                for candidate_id, sub in self._line_subs.items()
+                if sub == line_sub
+            ),
+            None,
+        )
+        return self.get(user_id) if user_id is not None else None
+
+    def list_users(self) -> list[AppUser]:
+        return list(self._users)
+
+    def create_user(self, command: CreateUserCommand, *, actor: AppUser) -> AppUser:
+        check_manage_users(actor)
+        email = command.email.strip() if command.email else None
+        if email is not None and any(
+            candidate.email is not None
+            and candidate.email.casefold() == email.casefold()
+            for candidate in self._users
+        ):
+            raise DuplicateCodeError("email", email)
+        password_hash = hash_password(command.password) if command.password else None
+        self._next_id += 1
+        user = AppUser(
+            id=self._next_id,
+            role=command.role,
+            display_name=command.display_name.strip(),
+            email=email,
+            staff_id=command.staff_id,
+            borrower_id=command.borrower_id,
+            status=RecordStatus.ACTIVE,
+            must_change_password=password_hash is None,
+            last_login_at=None,
+        )
+        self._users.append(user)
+        if password_hash is not None:
+            self._passwords[user.id] = password_hash
+        return user
+
+    def set_user_status(
+        self, user_id: int, status: RecordStatus, *, actor: AppUser
+    ) -> None:
+        check_manage_users(actor)
+        if self.get(user_id) is None:
+            raise NotFoundError("user", user_id)
+        self._users = [
+            replace(candidate, status=status) if candidate.id == user_id else candidate
+            for candidate in self._users
+        ]
+
+    def change_password(self, user_id: int, command: ChangePasswordCommand) -> None:
+        user = self.get(user_id)
+        if user is None:
+            raise NotFoundError("user", user_id)
+        new_hash = apply_change_password(self._passwords.get(user_id), command)
+        self._passwords[user_id] = new_hash
+        self._users = [
+            replace(candidate, must_change_password=False)
+            if candidate.id == user_id
+            else candidate
+            for candidate in self._users
+        ]
+
+    def admin_reset_password(
+        self, user_id: int, new_password: str, *, actor: AppUser
+    ) -> None:
+        check_manage_users(actor)
+        if self.get(user_id) is None:
+            raise NotFoundError("user", user_id)
+        self._passwords[user_id] = hash_password(new_password)
+        self._users = [
+            replace(candidate, must_change_password=True)
+            if candidate.id == user_id
+            else candidate
+            for candidate in self._users
+        ]
+
+    def register_line_user(self, command: RegisterLineUser) -> AppUser:
+        if self.find_by_line_sub(command.line_sub) is not None:
+            raise DuplicateCodeError("line_sub", command.line_sub)
+        self._next_id += 1
+        user = AppUser(
+            id=self._next_id,
+            role=Role.USER,
+            display_name=command.display_name.strip(),
+            email=command.email,
+            staff_id=None,
+            borrower_id=self._next_id + 100,
+            status=RecordStatus.ACTIVE,
+            must_change_password=False,
+            last_login_at=None,
+        )
+        self._users.append(user)
+        self._line_subs[user.id] = command.line_sub
+        return user

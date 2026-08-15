@@ -2,6 +2,7 @@ from datetime import date, timedelta
 import flet as ft
 
 from app.components.common import build_card, build_page_header, update_control
+from app.contracts import AppUser, Permission, has_permission
 from app.database import bangkok_today
 from app.services.fake_services import FakeInventoryService
 from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
@@ -11,6 +12,8 @@ class BorrowFlowView(ft.Container):
     def __init__(
         self,
         service: FakeInventoryService | None = None,
+        *,
+        current_user: AppUser | None = None,
     ) -> None:
         super().__init__(
             expand=True,
@@ -18,6 +21,7 @@ class BorrowFlowView(ft.Container):
         )
 
         self.service = service or FakeInventoryService()
+        self.current_user = current_user
 
         borrowers = self.service.list_borrowers(include_inactive=False)
         staff = self.service.list_staff(include_inactive=False)
@@ -279,6 +283,11 @@ class BorrowFlowView(ft.Container):
         self,
         e: ft.ControlEvent,
     ) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_LOANS):
+            self._show_error("คุณไม่มีสิทธิ์ทำรายการนี้")
+            update_control(self)
+            return
+
         borrower_code = self.borrower_dropdown.value or ""
         staff_code = self.staff_dropdown.value or ""
         unit_id = self.unit_dropdown.value or ""

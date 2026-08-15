@@ -45,7 +45,7 @@ def test_navigation_items_include_expected_sections() -> None:
     items = get_navigation_items()
     labels = [item["label"] for item in items]
 
-    assert labels == ["Dashboard", "อุปกรณ์", "คนในระบบ", "ทำรายการยืม", "คืนอุปกรณ์", "ประวัติ"]
+    assert labels == ["Dashboard", "อุปกรณ์", "ของฉัน", "คนในระบบ", "ทำรายการยืม", "คืนอุปกรณ์", "ประวัติ"]
 
 
 def test_build_app_shell_switches_content_on_navigation_change() -> None:
@@ -54,10 +54,10 @@ def test_build_app_shell_switches_content_on_navigation_change() -> None:
     navigation_menu = row.controls[0].content.controls[1]
     content_area = row.controls[2]
 
-    navigation_menu.controls[2].on_click(None)
+    navigation_menu.controls[3].on_click(None)
 
     assert isinstance(content_area.content.content, StaffBorrowersView)
-    assert navigation_menu.controls[2].selected is True
+    assert navigation_menu.controls[3].selected is True
     assert navigation_menu.controls[0].selected is False
 
 
@@ -85,4 +85,4 @@ def test_state_view_renders_title_and_message() -> None:
 
 
 def test_app_title_is_defined() -> None:
-    assert APP_TITLE == "ระบบยืม–คืนอุปกรณ์"
+    assert APP_TITLE == "ยืม-คืนครุภัณฑ์ BRU-CS"

@@ -15,6 +15,7 @@ from app.components.common import (
     open_dialog,
     update_control,
 )
+from app.contracts import AppUser, Permission, has_permission
 from app.services.fake_services import FakeInventoryService, LoanRecord
 from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, CONTROL_RADIUS
 
@@ -25,10 +26,12 @@ class LoansView(ft.Container):
         service: FakeInventoryService | None = None,
         *,
         mobile: bool = False,
+        current_user: AppUser | None = None,
     ) -> None:
         super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
         self.mobile = mobile
+        self.current_user = current_user
         self._table_width: float | None = None
         self._surface_width: float | None = None
 
@@ -457,6 +460,12 @@ class LoansView(ft.Container):
         update_control(self)
 
     def _handle_confirm_return(self, e: ft.ControlEvent) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_LOANS):
+            self.return_form_feedback.value = "คุณไม่มีสิทธิ์ทำรายการนี้"
+            self.return_form_feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+
         if self.selected_loan is None:
             self.return_form_feedback.value = "กรุณาเลือกรายการยืมก่อน"
             self.return_form_feedback.color = ft.Colors.RED_700

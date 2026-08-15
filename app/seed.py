@@ -4,78 +4,85 @@ from datetime import timedelta
 from pathlib import Path
 
 from app.database import bangkok_today, connection, initialize_database, utc_now
+from app.security import hash_password
 
 
 DEMO_SEED_KEY = "general-equipment-demo-v1"
+AUTH_SEED_KEY = "auth-demo-users-v1"
 
 CATEGORIES = (
-    "คอมพิวเตอร์และไอที",
-    "เครื่องมือวิทยาศาสตร์",
-    "โสตทัศนูปกรณ์",
-    "เครื่องมือช่าง",
-    "อุปกรณ์สำนักงาน",
-    "อุปกรณ์กิจกรรม",
-    "อุปกรณ์ความปลอดภัย",
-    "อื่น ๆ",
+    "คอมพิวเตอร์และโน้ตบุ๊ก",
+    "บอร์ดไมโครคอนโทรลเลอร์",
+    "บอร์ดคอมพิวเตอร์",
+    "เซ็นเซอร์ IoT",
+    "กล้องและวิชัน",
+    "หุ่นยนต์และโดรน",
+    "เครือข่าย",
+    "อุปกรณ์นำเสนอและอื่น ๆ",
+    "ชิ้นส่วนซูเปอร์คอมพิวเตอร์",
 )
 
 LOCATIONS = (
-    ("DEMO-IT", "ศูนย์อุปกรณ์", "โซนอุปกรณ์ไอที", "ตู้ IT-A", "ชั้น 1"),
-    ("DEMO-SCI", "ศูนย์อุปกรณ์", "โซนเครื่องมือวิทยาศาสตร์", "ตู้ SCI-A", "ชั้น 1"),
-    ("DEMO-AV", "ศูนย์อุปกรณ์", "โซนสื่อและกิจกรรม", "ตู้ AV-A", "ชั้น 2"),
-    ("DEMO-GEN", "ศูนย์อุปกรณ์", "คลังอุปกรณ์ทั่วไป", "ตู้ GEN-A", "ชั้น 1"),
-    ("DEMO-MAINT", "อาคารบริการ", "จุดพักซ่อม", "ตู้ซ่อม", "ชั้น 1"),
+    ("DEMO-LAB", "อาคารวิทยาการคอมพิวเตอร์", "ห้องปฏิบัติการ IoT", "ตู้ IOT-A", "ชั้น 2"),
+    ("DEMO-COM", "อาคารวิทยาการคอมพิวเตอร์", "ห้องปฏิบัติการคอมพิวเตอร์", "ตู้ COM-A", "ชั้น 2"),
+    ("DEMO-ROB", "อาคารวิทยาการคอมพิวเตอร์", "ห้องปฏิบัติการหุ่นยนต์", "ตู้ ROB-A", "ชั้น 1"),
+    ("DEMO-STORE", "อาคารวิทยาการคอมพิวเตอร์", "ห้องเก็บครุภัณฑ์", "ตู้ ST-A", "ชั้น 1"),
+    ("DEMO-MAINT", "อาคารวิทยาการคอมพิวเตอร์", "จุดพักซ่อม", "ตู้ซ่อม", "ชั้น 1"),
 )
 
 STAFF = (
-    ("ST-DEMO-001", "กิตติพงศ์ ผู้ดูแลอุปกรณ์", "kittipong@example.com", "080-100-1001"),
-    ("ST-DEMO-002", "พิมพ์ชนก เจ้าหน้าที่พัสดุ", "pimchanok@example.com", "080-100-1002"),
-    ("ST-DEMO-003", "ณัฐวุฒิ ผู้ประสานงาน", "nattawut@example.com", "080-100-1003"),
+    ("ST-DEMO-001", "กิตติพงศ์ เจ้าหน้าที่สาขา", "kittipong@example.com", "080-100-1001"),
+    ("ST-DEMO-002", "พิมพ์ชนก เจ้าหน้าที่ครุภัณฑ์", "pimchanok@example.com", "080-100-1002"),
+    ("ST-DEMO-003", "ณัฐวุฒิ ผู้ช่วยเจ้าหน้าที่แล็บ", "nattawut@example.com", "080-100-1003"),
 )
 
 BORROWERS = (
-    ("BR-DEMO-001", "อริสา จันทร์ดี", "ฝ่ายเทคโนโลยีสารสนเทศ", "arisa@example.com", "081-200-2001"),
-    ("BR-DEMO-002", "ธนกฤต วัฒนชัย", "งานวิจัยและพัฒนา", "thanakrit@example.com", "081-200-2002"),
-    ("BR-DEMO-003", "ปวีณา สุขสวัสดิ์", "ฝ่ายปฏิบัติการ", "paweena@example.com", "081-200-2003"),
-    ("BR-DEMO-004", "ศุภกร มีทรัพย์", "งานอาคารสถานที่", "supakorn@example.com", "081-200-2004"),
-    ("BR-DEMO-005", "ชลธิชา แสงทอง", "ฝ่ายสื่อสารองค์กร", "chonthicha@example.com", "081-200-2005"),
+    ("BR-DEMO-001", "อริสา จันทร์ดี", "นักศึกษาชั้นปีที่ 3", "arisa@example.com", "081-200-2001"),
+    ("BR-DEMO-002", "ธนกฤต วัฒนชัย", "อาจารย์ประจำสาขา", "thanakrit@example.com", "081-200-2002"),
+    ("BR-DEMO-003", "ปวีณา สุขสวัสดิ์", "นักศึกษาชั้นปีที่ 4", "paweena@example.com", "081-200-2003"),
+    ("BR-DEMO-004", "ศุภกร มีทรัพย์", "นักศึกษาชั้นปีที่ 2", "supakorn@example.com", "081-200-2004"),
+    ("BR-DEMO-005", "ชลธิชา แสงทอง", "อาจารย์", "chonthicha@example.com", "081-200-2005"),
 )
 
 # Each equipment type produces two individually tracked units (25 x 2 = 50).
 EQUIPMENT_TYPES = (
-    ("EQ-IT-001", "โน้ตบุ๊ก Dell Latitude", "คอมพิวเตอร์และไอที", "Dell", "Latitude 5450", "32900", "DEMO-IT", "IT-NBK"),
-    ("EQ-IT-002", "โน้ตบุ๊ก Lenovo ThinkPad", "คอมพิวเตอร์และไอที", "Lenovo", "ThinkPad E14", "31500", "DEMO-IT", "IT-NBL"),
-    ("EQ-IT-003", "จอภาพ 24 นิ้ว", "คอมพิวเตอร์และไอที", "Samsung", "S24C310", "4590", "DEMO-IT", "IT-MON"),
-    ("EQ-IT-004", "คีย์บอร์ดไร้สาย", "คอมพิวเตอร์และไอที", "Logitech", "K380", "1290", "DEMO-IT", "IT-KBD"),
-    ("EQ-IT-005", "เมาส์ไร้สาย", "คอมพิวเตอร์และไอที", "Logitech", "M331", "690", "DEMO-IT", "IT-MSE"),
-    ("EQ-IT-006", "เราเตอร์ Wi-Fi", "คอมพิวเตอร์และไอที", "TP-Link", "Archer AX23", "2490", "DEMO-IT", "IT-RTR"),
-    ("EQ-IT-007", "External SSD 1 TB", "คอมพิวเตอร์และไอที", "SanDisk", "Extreme Portable", "3990", "DEMO-IT", "IT-SSD"),
-    ("EQ-IT-008", "กล้องเว็บแคม", "คอมพิวเตอร์และไอที", "Logitech", "C920", "2890", "DEMO-IT", "IT-WEB"),
-    ("EQ-OFF-001", "เครื่องพิมพ์ฉลาก", "อุปกรณ์สำนักงาน", "Brother", "PT-D210", "1890", "DEMO-GEN", "OFF-PRN"),
-    ("EQ-IT-009", "แท็บเล็ต", "คอมพิวเตอร์และไอที", "Samsung", "Galaxy Tab A9", "7990", "DEMO-IT", "IT-TAB"),
-    ("EQ-SCI-001", "กล้องจุลทรรศน์", "เครื่องมือวิทยาศาสตร์", "Olympus", "CX23", "42500", "DEMO-SCI", "SCI-MIC"),
-    ("EQ-SCI-002", "เครื่องชั่งดิจิทัล", "เครื่องมือวิทยาศาสตร์", "Ohaus", "Scout SPX", "18500", "DEMO-SCI", "SCI-BAL"),
-    ("EQ-SCI-003", "เครื่องวัดค่า pH", "เครื่องมือวิทยาศาสตร์", "Hanna", "HI98107", "5900", "DEMO-SCI", "SCI-PHM"),
-    ("EQ-SCI-004", "เครื่องวัดอุณหภูมิ", "เครื่องมือวิทยาศาสตร์", "Testo", "Testo 110", "7200", "DEMO-SCI", "SCI-TMP"),
-    ("EQ-SCI-005", "เครื่องกวนสารแม่เหล็ก", "เครื่องมือวิทยาศาสตร์", "IKA", "C-MAG HS 4", "14900", "DEMO-SCI", "SCI-STR"),
-    ("EQ-SCI-006", "เครื่องวัดความชื้น", "เครื่องมือวิทยาศาสตร์", "Benetech", "GM1362", "2490", "DEMO-SCI", "SCI-HUM"),
-    ("EQ-SCI-007", "ชุดทดลองไฟฟ้า", "เครื่องมือวิทยาศาสตร์", "Pasco", "Basic Electricity", "8900", "DEMO-SCI", "SCI-ELC"),
-    ("EQ-SCI-008", "เครื่องวัดแสง", "เครื่องมือวิทยาศาสตร์", "UNI-T", "UT383", "1390", "DEMO-SCI", "SCI-LUX"),
-    ("EQ-AV-001", "โปรเจกเตอร์", "โสตทัศนูปกรณ์", "Epson", "EB-E01", "17900", "DEMO-AV", "AV-PRO"),
-    ("EQ-AV-002", "กล้องถ่ายภาพ", "โสตทัศนูปกรณ์", "Canon", "EOS R50", "28900", "DEMO-AV", "AV-CAM"),
-    ("EQ-AV-003", "ขาตั้งกล้อง", "โสตทัศนูปกรณ์", "Manfrotto", "Compact Action", "3290", "DEMO-AV", "AV-TRI"),
-    ("EQ-AV-004", "ลำโพงพกพา", "อุปกรณ์กิจกรรม", "JBL", "Charge 5", "5990", "DEMO-AV", "AV-SPK"),
-    ("EQ-TOOL-001", "สว่านไฟฟ้า", "เครื่องมือช่าง", "Bosch", "GSB 550", "2990", "DEMO-GEN", "TOOL-DRL"),
-    ("EQ-TOOL-002", "ชุดเครื่องมือช่าง", "เครื่องมือช่าง", "Stanley", "STMT81243", "4590", "DEMO-GEN", "TOOL-SET"),
-    ("EQ-SAFE-001", "ชุดปฐมพยาบาล", "อุปกรณ์ความปลอดภัย", "3M", "Workplace Kit", "1590", "DEMO-GEN", "SAFE-FST"),
+    ("EQ-COM-001", "โน้ตบุ๊ก Dell Latitude", "คอมพิวเตอร์และโน้ตบุ๊ก", "Dell", "Latitude 5450", "32900", "DEMO-COM", "COM-NBK"),
+    ("EQ-COM-002", "จอภาพ 24 นิ้ว", "คอมพิวเตอร์และโน้ตบุ๊ก", "Samsung", "S24C310", "4590", "DEMO-COM", "COM-MON"),
+    ("EQ-COM-003", "คอมพิวเตอร์ตั้งโต๊ะ", "คอมพิวเตอร์และโน้ตบุ๊ก", "HP", "ProDesk 400", "18500", "DEMO-COM", "COM-PC"),
+    ("EQ-COM-004", "ชุดคีย์บอร์ดเมาส์", "คอมพิวเตอร์และโน้ตบุ๊ก", "Logitech", "MK270", "890", "DEMO-COM", "COM-KBM"),
+    ("EQ-MCU-001", "Arduino Uno R4", "บอร์ดไมโครคอนโทรลเลอร์", "Arduino", "Uno R4", "1200", "DEMO-LAB", "MCU-ARD"),
+    ("EQ-MCU-002", "ESP32 DevKit", "บอร์ดไมโครคอนโทรลเลอร์", "Espressif", "ESP32-WROOM", "350", "DEMO-LAB", "MCU-ESP"),
+    ("EQ-MCU-003", "NodeMCU ESP8266", "บอร์ดไมโครคอนโทรลเลอร์", "Espressif", "ESP8266", "250", "DEMO-LAB", "MCU-NOD"),
+    ("EQ-MCU-004", "STM32 Discovery", "บอร์ดไมโครคอนโทรลเลอร์", "STMicroelectronics", "STM32F4-Discovery", "1500", "DEMO-LAB", "MCU-STM"),
+    ("EQ-MCU-005", "ชุดบอร์ด FPGA", "บอร์ดไมโครคอนโทรลเลอร์", "Terasic", "DE10-Lite", "8900", "DEMO-LAB", "MCU-FPGA"),
+    ("EQ-SBC-001", "Raspberry Pi 5", "บอร์ดคอมพิวเตอร์", "Raspberry Pi", "Pi 5 8GB", "2900", "DEMO-LAB", "SBC-RPI"),
+    ("EQ-SBC-002", "Raspberry Pi 4", "บอร์ดคอมพิวเตอร์", "Raspberry Pi", "Pi 4 4GB", "1800", "DEMO-LAB", "SBC-RPI4"),
+    ("EQ-SBC-003", "Jetson Nano", "บอร์ดคอมพิวเตอร์", "NVIDIA", "Jetson Nano 4GB", "4500", "DEMO-ROB", "SBC-JSN"),
+    ("EQ-SBC-004", "Jetson Orin Nano", "บอร์ดคอมพิวเตอร์", "NVIDIA", "Orin Nano 8GB", "14900", "DEMO-ROB", "SBC-JON"),
+    ("EQ-SEN-001", "ชุดเซ็นเซอร์พื้นฐาน 37 ตัว", "เซ็นเซอร์ IoT", "DFRobot", "37-in-1 Kit", "1500", "DEMO-LAB", "SEN-BAS"),
+    ("EQ-SEN-002", "เซ็นเซอร์อุณหภูมิความชื้น DHT22", "เซ็นเซอร์ IoT", "Aosong", "DHT22", "150", "DEMO-LAB", "SEN-DHT"),
+    ("EQ-SEN-003", "เซ็นเซอร์ก๊าซ MQ-2", "เซ็นเซอร์ IoT", "Winsen", "MQ-2", "200", "DEMO-LAB", "SEN-GAS"),
+    ("EQ-SEN-004", "โมดูล GPS", "เซ็นเซอร์ IoT", "u-blox", "NEO-6M", "450", "DEMO-LAB", "SEN-GPS"),
+    ("EQ-CAM-001", "เว็บแคม 4K", "กล้องและวิชัน", "Logitech", "Brio 4K", "6900", "DEMO-COM", "CAM-WEB"),
+    ("EQ-CAM-002", "กล้อง IP", "กล้องและวิชัน", "Hikvision", "DS-2CD", "5900", "DEMO-ROB", "CAM-IP"),
+    ("EQ-CAM-003", "กล้อง depth RealSense", "กล้องและวิชัน", "Intel", "RealSense D435i", "16500", "DEMO-ROB", "CAM-RS"),
+    ("EQ-ROB-001", "หุ่นยนต์แขนกล 6 แกน", "หุ่นยนต์และโดรน", "Dobot", "Magician", "39500", "DEMO-ROB", "ROB-ARM"),
+    ("EQ-ROB-002", "โดรนถ่ายภาพ", "หุ่นยนต์และโดรน", "DJI", "Mini 4 Pro", "29900", "DEMO-ROB", "ROB-DRN"),
+    ("EQ-NET-001", "สวิตช์ 10GbE", "เครือข่าย", "MikroTik", "CRS305", "5400", "DEMO-COM", "NET-SW"),
+    ("EQ-NET-002", "เราเตอร์ Wi-Fi 6", "เครือข่าย", "TP-Link", "Archer AXE75", "6900", "DEMO-COM", "NET-RTR"),
+    ("EQ-AV-001", "โปรเจกเตอร์", "อุปกรณ์นำเสนอและอื่น ๆ", "Epson", "EB-E01", "17900", "DEMO-STORE", "AV-PRO"),
+    ("EQ-SC-001", "CPU AMD EPYC 7A53", "ชิ้นส่วนซูเปอร์คอมพิวเตอร์", "AMD", "EPYC 7A53 64C", "420000", "DEMO-STORE", "SC-CPU"),
+    ("EQ-SC-002", "GPU AMD Instinct MI250X", "ชิ้นส่วนซูเปอร์คอมพิวเตอร์", "AMD", "Instinct MI250X 128GB", "2600000", "DEMO-STORE", "SC-GPU"),
+    ("EQ-SC-003", "โหนด HPE Cray EX", "ชิ้นส่วนซูเปอร์คอมพิวเตอร์", "HPE", "Cray EX Frontier Node", "12000000", "DEMO-STORE", "SC-NOD"),
+    ("EQ-SC-004", "สวิตช์อินเตอร์คอนเนกต์ Slingshot", "ชิ้นส่วนซูเปอร์คอมพิวเตอร์", "HPE", "Slingshot-11", "890000", "DEMO-STORE", "SC-SW"),
 )
 
 LOANS = (
-    ("LOAN-DEMO-001", "BR-DEMO-001", "ST-DEMO-001", ("IT-NBK-001", "IT-MON-001"), 4, 2, "ยืมสำหรับจัดอบรมภายใน", "IT-MON-001", "available", "DEMO-IT", "อุปกรณ์สภาพสมบูรณ์"),
-    ("LOAN-DEMO-002", "BR-DEMO-002", "ST-DEMO-002", ("SCI-MIC-001",), 7, -4, "ยืมสำหรับเก็บข้อมูลโครงการวิจัย", "SCI-MIC-001", "available", "DEMO-SCI", "ทำความสะอาดและจัดเก็บแล้ว"),
-    ("LOAN-DEMO-003", "BR-DEMO-003", "ST-DEMO-001", ("SCI-PHM-001", "SCI-BAL-001"), 5, -1, "ยืมสำหรับตรวจสอบคุณภาพตัวอย่าง", "SCI-PHM-001", "maintenance", "DEMO-MAINT", "ค่าที่อ่านได้ไม่คงที่ ส่งตรวจเช็ก"),
-    ("LOAN-DEMO-004", "BR-DEMO-004", "ST-DEMO-003", ("TOOL-DRL-001", "TOOL-SET-001"), 2, 1, "ยืมสำหรับงานติดตั้งพื้นที่กิจกรรม", "TOOL-DRL-001", "reported_lost", None, "ไม่พบอุปกรณ์หลังเสร็จงาน"),
-    ("LOAN-DEMO-005", "BR-DEMO-005", "ST-DEMO-002", ("AV-CAM-001", "AV-SPK-001"), 1, 3, "ยืมสำหรับบันทึกภาพและจัดกิจกรรม", "AV-CAM-001", "available", "DEMO-AV", "คืนกล้องแล้ว เหลือลำโพงที่ยังใช้งานอยู่"),
+    ("LOAN-DEMO-001", "BR-DEMO-001", "ST-DEMO-001", ("SBC-RPI-001", "SEN-BAS-001"), 4, 2, "ยืมทำโครงงาน IoT ระบบควบคุมโรงเพาะเห็ดอัตโนมัติ", "SEN-BAS-001", "available", "DEMO-LAB", "ชุดเซ็นเซอร์สภาพสมบูรณ์"),
+    ("LOAN-DEMO-002", "BR-DEMO-002", "ST-DEMO-003", ("CAM-RS-001",), 7, -4, "ยืมกล้อง depth สอนวิชา Computer Vision", "CAM-RS-001", "available", "DEMO-ROB", "สอนเสร็จแล้ว คืนครบ"),
+    ("LOAN-DEMO-003", "BR-DEMO-003", "ST-DEMO-001", ("MCU-ESP-001", "SEN-DHT-001"), 5, -1, "ยืมทำโปรเจกต์จบ ระบบรดน้ำต้นไม้อัตโนมัติ", "MCU-ESP-001", "maintenance", "DEMO-MAINT", "ช่อง USB หลวม ส่งตรวจเช็ก"),
+    ("LOAN-DEMO-004", "BR-DEMO-004", "ST-DEMO-003", ("CAM-IP-001", "ROB-DRN-001"), 2, 1, "ยืมถ่ายภาพงานแข่งขันหุ่นยนต์ของสาขา", "CAM-IP-001", "reported_lost", None, "กล้องหายหลังกิจกรรมแข่งขัน"),
+    ("LOAN-DEMO-005", "BR-DEMO-005", "ST-DEMO-002", ("COM-PC-001", "AV-PRO-001"), 1, 3, "ยืมคอมตั้งโต๊ะและโปรเจกเตอร์สอนในชั้นเรียน", "AV-PRO-001", "available", "DEMO-STORE", "คืนโปรเจกเตอร์แล้ว เหลือคอมที่ยังใช้งานอยู่"),
 )
 
 
@@ -86,6 +93,62 @@ def _row_id(database, table: str, code_column: str, code: str) -> int:
     if row is None:
         raise RuntimeError(f"Seed record not found: {table}.{code_column}={code}")
     return row["id"]
+
+
+def _optional_row_id(database, table: str, code_column: str, code: str) -> int | None:
+    row = database.execute(
+        f"SELECT id FROM {table} WHERE {code_column} = ?", (code,)
+    ).fetchone()
+    return row["id"] if row is not None else None
+
+
+def _seed_demo_users(database_path: str | Path | None = None) -> bool:
+    """Seed demo login accounts under their own idempotency key.
+
+    Uses a separate key so databases that were seeded before the auth system
+    existed still receive the demo accounts without being wiped.
+    """
+    with connection(database_path) as database:
+        database.execute("BEGIN IMMEDIATE")
+        try:
+            if database.execute(
+                "SELECT 1 FROM app_seed_runs WHERE seed_key = ?", (AUTH_SEED_KEY,)
+            ).fetchone():
+                database.rollback()
+                return False
+
+            admin_staff_id = _optional_row_id(
+                database, "staff", "staff_code", "ST-DEMO-001"
+            )
+            demo_borrower_id = _optional_row_id(
+                database, "borrowers", "borrower_code", "BR-DEMO-001"
+            )
+            database.execute(
+                """
+                INSERT OR IGNORE INTO app_users(
+                    role, email, password_hash, display_name, staff_id,
+                    must_change_password
+                ) VALUES ('admin', 'admin@lab.local', ?, 'ผู้ดูแลระบบ', ?, 1)
+                """,
+                (hash_password("admin123"), admin_staff_id),
+            )
+            database.execute(
+                """
+                INSERT OR IGNORE INTO app_users(
+                    role, email, password_hash, display_name, borrower_id,
+                    must_change_password
+                ) VALUES ('user', 'borrower@lab.local', ?, 'ผู้ยืมทดสอบ', ?, 0)
+                """,
+                (hash_password("borrow123"), demo_borrower_id),
+            )
+            database.execute(
+                "INSERT INTO app_seed_runs(seed_key) VALUES (?)", (AUTH_SEED_KEY,)
+            )
+            database.commit()
+            return True
+        except Exception:
+            database.rollback()
+            raise
 
 
 def seed_demo_data(database_path: str | Path | None = None) -> bool:
@@ -101,7 +164,7 @@ def seed_demo_data(database_path: str | Path | None = None) -> bool:
                 "SELECT 1 FROM app_seed_runs WHERE seed_key = ?", (DEMO_SEED_KEY,)
             ).fetchone():
                 database.rollback()
-                return False
+                return _seed_demo_users(database_path)
 
             for name in CATEGORIES:
                 database.execute(
@@ -139,6 +202,12 @@ def seed_demo_data(database_path: str | Path | None = None) -> bool:
                     (code, name, department, email, phone, "ข้อมูลตัวอย่างสำหรับทดลองระบบ"),
                 )
 
+            admin_staff_id = _optional_row_id(
+                database, "staff", "staff_code", "ST-DEMO-001"
+            )
+            demo_borrower_id = _optional_row_id(
+                database, "borrowers", "borrower_code", "BR-DEMO-001"
+            )
             system_staff_id = _row_id(
                 database, "staff", "staff_code", "ST-DEMO-001"
             )
@@ -174,7 +243,7 @@ def seed_demo_data(database_path: str | Path | None = None) -> bool:
                         model,
                         location_id,
                         price,
-                        "อุปกรณ์ตัวอย่างสำหรับระบบยืม–คืนอเนกประสงค์",
+                        "ครุภัณฑ์ตัวอย่างสำหรับสาขาวิทยาการคอมพิวเตอร์",
                         category_id,
                     ),
                 )
@@ -405,7 +474,7 @@ def seed_demo_data(database_path: str | Path | None = None) -> bool:
                 "INSERT INTO app_seed_runs(seed_key) VALUES (?)", (DEMO_SEED_KEY,)
             )
             database.commit()
-            return True
+            return _seed_demo_users(database_path) or True
         except Exception:
             database.rollback()
             raise

@@ -44,6 +44,25 @@ docker compose up --build -d                    # → http://localhost:8080
   `expand = None` to un-flex. Guarded by `tests/test_layout_guards.py`; debugging
   playbook in `.agents/skills/flet-layout-debug/SKILL.md`.
 
+### Authentication & authorization
+
+- Roles: `admin` (staff, full access) / `user` (borrower self-service: อุปกรณ์, ของฉัน,
+  ประวัติ). `Role`, `Permission`, `ROLE_PERMISSIONS`, `has_permission()` live in
+  `app/contracts.py`; both roles are enforced in TWO places: nav/route gating in
+  `main.py` (`visible_navigation_items` + `navigate_to` guard) and
+  `if not has_permission(...)` guards at the top of every mutation handler in views
+  (`borrow_flow`, `loans`, `staff_borrowers`, `dashboard`).
+- Identity: `app_users` (email + password_hash via `app/security.py` pbkdf2, and/or
+  LINE via `line_sub`) linking to `staff_id` or `borrower_id`. `AuthService` protocol
+  implemented by `FakeAuthService` and `SQLiteAuthAdapter` — keep them in sync like
+  the inventory facades.
+- Session: `page.session["user_id"]`; `main()` shows LoginView or the shell;
+  `must_change_password` routes to ChangePasswordView. LINE login uses flet's
+  `page.login(OAuthProvider)` (`app/services/line_login.py`), enabled by env vars
+  `LINE_CLIENT_ID` / `LINE_CLIENT_SECRET` / `LINE_REDIRECT_URL` — never commit secrets.
+- Demo accounts (seeded): `admin@lab.local`/`admin123` (must change on first login),
+  `borrower@lab.local`/`borrow123`. Test fixtures: `tests/test_auth_fixtures.py`.
+
 ### Testing
 
 - `tests/` = view + fake-service unit tests (build flet controls, assert structure; no

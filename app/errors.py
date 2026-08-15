@@ -130,3 +130,11 @@ class LostCaseAlreadyResolved(DomainError):
             f"Lost case {case_id} has already been resolved",
             details={"case_id": case_id, "resolution": resolution},
         )
+
+
+class AuthenticationError(DomainError):
+    code = "authentication_error"
+
+
+class PermissionDenied(DomainError):
+    code = "permission_denied"

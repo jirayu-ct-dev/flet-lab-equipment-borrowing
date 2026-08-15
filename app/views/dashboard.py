@@ -10,6 +10,7 @@ from app.components.common import (
     open_dialog,
     update_control,
 )
+from app.contracts import AppUser, Permission, has_permission
 from app.services.fake_services import FakeInventoryService
 from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
 
@@ -22,10 +23,12 @@ class DashboardView(ft.Container):
         service: FakeInventoryService | None = None,
         *,
         mobile: bool = False,
+        current_user: AppUser | None = None,
     ) -> None:
         super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
         self.mobile = mobile
+        self.current_user = current_user
 
         self.metric_values = {
             status: ft.Text(
@@ -436,6 +439,10 @@ class DashboardView(ft.Container):
         open_dialog(self, self.manage_dialog)
 
     def _save_category(self, e: ft.ControlEvent | None) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_INVENTORY):
+            self._form_error(self.category_form_feedback, "คุณไม่มีสิทธิ์ทำรายการนี้")
+            return
+
         name = (self.category_name.value or "").strip()
         if not name:
             self._form_error(self.category_form_feedback, "กรุณากรอกชื่อหมวดหมู่")
@@ -450,6 +457,10 @@ class DashboardView(ft.Container):
         self._finish("เพิ่มหมวดหมู่เรียบร้อย", self.category_dialog)
 
     def _save_equipment(self, e: ft.ControlEvent | None) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_INVENTORY):
+            self._form_error(self.equipment_form_feedback, "คุณไม่มีสิทธิ์ทำรายการนี้")
+            return
+
         name = (self.equipment_name.value or "").strip()
         category_id = self.equipment_category.value or ""
         asset_code = (self.equipment_asset_code.value or "").strip()
@@ -475,6 +486,10 @@ class DashboardView(ft.Container):
         self._finish("เพิ่มอุปกรณ์เรียบร้อย", self.equipment_dialog)
 
     def _save_management(self, e: ft.ControlEvent | None) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_INVENTORY):
+            self._form_error(self.manage_form_feedback, "คุณไม่มีสิทธิ์ทำรายการนี้")
+            return
+
         unit_id = self.manage_unit.value or ""
         action = self.manage_action.value or ""
         location = (self.manage_location.value or "").strip()

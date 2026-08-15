@@ -1,6 +1,8 @@
 import flet as ft
 
-APP_TITLE = "ระบบยืม–คืนอุปกรณ์"
+from app.contracts import AppUser, Permission, has_permission
+
+APP_TITLE = "ยืม-คืนครุภัณฑ์ BRU-CS"
 PAGE_PADDING = 32
 NAV_WIDTH = 279
 CONTROL_RADIUS = 12
@@ -96,10 +98,18 @@ STATUS_THEMES = {
 }
 
 NAVIGATION_ITEMS = [
-    {"label": "Dashboard", "icon": ft.Icons.DASHBOARD_OUTLINED, "selected_icon": ft.Icons.DASHBOARD, "route": "dashboard"},
-    {"label": "อุปกรณ์", "icon": ft.Icons.INVENTORY_2_OUTLINED, "selected_icon": ft.Icons.INVENTORY_2, "route": "inventory"},
-    {"label": "คนในระบบ", "icon": ft.Icons.PEOPLE_OUTLINED, "selected_icon": ft.Icons.PEOPLE, "route": "people"},
-    {"label": "ทำรายการยืม", "icon": ft.Icons.ASSIGNMENT_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT, "route": "borrow"},
-    {"label": "คืนอุปกรณ์", "icon": ft.Icons.RECEIPT_LONG_OUTLINED, "selected_icon": ft.Icons.RECEIPT_LONG, "route": "returns"},
-    {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED, "selected_icon": ft.Icons.HISTORY, "route": "history"},
+    {"label": "Dashboard", "icon": ft.Icons.DASHBOARD_OUTLINED, "selected_icon": ft.Icons.DASHBOARD, "route": "dashboard", "permission": Permission.VIEW_DASHBOARD},
+    {"label": "อุปกรณ์", "icon": ft.Icons.INVENTORY_2_OUTLINED, "selected_icon": ft.Icons.INVENTORY_2, "route": "inventory", "permission": Permission.VIEW_INVENTORY},
+    {"label": "ของฉัน", "icon": ft.Icons.ASSIGNMENT_IND_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT_IND, "route": "my_loans", "permission": Permission.VIEW_MY_LOANS},
+    {"label": "คนในระบบ", "icon": ft.Icons.PEOPLE_OUTLINED, "selected_icon": ft.Icons.PEOPLE, "route": "people", "permission": Permission.MANAGE_PEOPLE},
+    {"label": "ทำรายการยืม", "icon": ft.Icons.ASSIGNMENT_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT, "route": "borrow", "permission": Permission.MANAGE_LOANS},
+    {"label": "คืนอุปกรณ์", "icon": ft.Icons.RECEIPT_LONG_OUTLINED, "selected_icon": ft.Icons.RECEIPT_LONG, "route": "returns", "permission": Permission.MANAGE_LOANS},
+    {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED, "selected_icon": ft.Icons.HISTORY, "route": "history", "permission": Permission.VIEW_HISTORY},
 ]
+
+
+def visible_navigation_items(user: AppUser | None) -> list[dict]:
+    """Return NAVIGATION_ITEMS entries permitted for user (None → all)."""
+    if user is None:
+        return list(NAVIGATION_ITEMS)
+    return [item for item in NAVIGATION_ITEMS if has_permission(user, item["permission"])]

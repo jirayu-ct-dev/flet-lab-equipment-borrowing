@@ -550,3 +550,101 @@ class AuditLogService(Protocol):
 @runtime_checkable
 class LoanQueryService(Protocol):
     def search(self, filters: LoanQueryFilter = LoanQueryFilter()) -> list[LoanSummary]: ...
+
+
+class Role(StrEnum):
+    ADMIN = "admin"
+    USER = "user"
+
+
+class Permission(StrEnum):
+    VIEW_DASHBOARD = "view_dashboard"
+    VIEW_INVENTORY = "view_inventory"
+    VIEW_HISTORY = "view_history"
+    VIEW_MY_LOANS = "view_my_loans"
+    MANAGE_LOANS = "manage_loans"
+    MANAGE_INVENTORY = "manage_inventory"
+    MANAGE_PEOPLE = "manage_people"
+    MANAGE_USERS = "manage_users"
+
+
+ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
+    Role.ADMIN: frozenset(Permission),
+    Role.USER: frozenset({
+        Permission.VIEW_INVENTORY,
+        Permission.VIEW_HISTORY,
+        Permission.VIEW_MY_LOANS,
+    }),
+}
+
+
+def has_permission(user: "AppUser | None", permission: Permission) -> bool:
+    """False for None (unauthenticated)."""
+    if user is None:
+        return False
+    return permission in ROLE_PERMISSIONS[user.role]
+
+
+@dataclass(frozen=True, slots=True)
+class AppUser:
+    id: int
+    role: Role
+    display_name: str
+    email: str | None
+    staff_id: int | None
+    borrower_id: int | None
+    status: RecordStatus
+    must_change_password: bool
+    last_login_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class LoginCommand:
+    identity: str          # email
+    password: str
+
+
+@dataclass(frozen=True, slots=True)
+class CreateUserCommand:
+    role: Role
+    display_name: str
+    email: str | None = None
+    password: str | None = None
+    staff_id: int | None = None
+    borrower_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ChangePasswordCommand:
+    current_password: str
+    new_password: str
+
+
+@dataclass(frozen=True, slots=True)
+class RegisterLineUser:
+    line_sub: str
+    display_name: str
+    email: str | None = None
+    borrower_code: str | None = None
+    department: str | None = None
+
+
+@runtime_checkable
+class AuthService(Protocol):
+    def authenticate(self, command: LoginCommand) -> AppUser: ...
+
+    def get(self, user_id: int) -> AppUser | None: ...
+
+    def find_by_line_sub(self, line_sub: str) -> AppUser | None: ...
+
+    def list_users(self) -> list[AppUser]: ...
+
+    def create_user(self, command: CreateUserCommand, *, actor: AppUser) -> AppUser: ...
+
+    def set_user_status(self, user_id: int, status: RecordStatus, *, actor: AppUser) -> None: ...
+
+    def change_password(self, user_id: int, command: ChangePasswordCommand) -> None: ...
+
+    def admin_reset_password(self, user_id: int, new_password: str, *, actor: AppUser) -> None: ...
+
+    def register_line_user(self, command: RegisterLineUser) -> AppUser: ...

@@ -14,6 +14,7 @@ from app.components.common import (
     open_dialog,
     update_control,
 )
+from app.contracts import AppUser, Permission, has_permission
 from app.services.fake_services import FakeInventoryService
 from app.theme import CONTROL_RADIUS
 
@@ -24,10 +25,12 @@ class StaffBorrowersView(ft.Container):
         service: FakeInventoryService | None = None,
         *,
         mobile: bool = False,
+        current_user: AppUser | None = None,
     ) -> None:
         super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
         self.mobile = mobile
+        self.current_user = current_user
         self._table_width: float | None = None
         self._surface_width: float | None = None
         self.selected_mode = "staff"
@@ -450,6 +453,12 @@ class StaffBorrowersView(ft.Container):
         self._render_borrowers()
 
     def _handle_save_staff(self, e: ft.ControlEvent) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_PEOPLE):
+            self.feedback.value = "คุณไม่มีสิทธิ์ทำรายการนี้"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+
         code = (self.staff_code.value or "").strip()
         name = (self.staff_name.value or "").strip()
         email = (self.staff_email.value or "").strip() or None
@@ -478,6 +487,12 @@ class StaffBorrowersView(ft.Container):
         update_control(self)
 
     def _handle_save_borrower(self, e: ft.ControlEvent) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_PEOPLE):
+            self.feedback.value = "คุณไม่มีสิทธิ์ทำรายการนี้"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+
         code = (self.borrower_code.value or "").strip()
         name = (self.borrower_name.value or "").strip()
         department = (self.borrower_department.value or "").strip() or None

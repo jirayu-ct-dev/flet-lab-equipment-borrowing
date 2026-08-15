@@ -494,16 +494,38 @@ class SQLiteInventoryAdapter:
     def list_loans(self, *, filter_type: str | None = None) -> list[LoanRecord]:
         with connection(self.database_path) as database:
             ids = [row["id"] for row in database.execute("SELECT id FROM borrow_transactions ORDER BY id DESC")]
-        loans = [self._loan_view(self.loans.get(loan_id)) for loan_id in ids]
+        return self._apply_loan_filter(
+            [self._loan_view(self.loans.get(loan_id)) for loan_id in ids], filter_type
+        )
+
+    def list_loans_for_borrower(
+        self, borrower_id: int, *, filter_type: str | None = None
+    ) -> list[LoanRecord]:
+        with connection(self.database_path) as database:
+            ids = [
+                row["id"]
+                for row in database.execute(
+                    "SELECT id FROM borrow_transactions WHERE borrower_id = ? ORDER BY id DESC",
+                    (borrower_id,),
+                )
+            ]
+        return self._apply_loan_filter(
+            [self._loan_view(self.loans.get(loan_id)) for loan_id in ids], filter_type
+        )
+
+    @staticmethod
+    def _apply_loan_filter(
+        loans: list[LoanRecord], filter_type: str | None
+    ) -> list[LoanRecord]:
         today = bangkok_today()
         if filter_type == "today":
-            loans = [loan for loan in loans if date.fromisoformat(loan.due_date) == today]
-        elif filter_type == "soon":
-            loans = [loan for loan in loans if 1 <= (date.fromisoformat(loan.due_date) - today).days <= 3]
-        elif filter_type == "overdue":
-            loans = [loan for loan in loans if date.fromisoformat(loan.due_date) < today and loan.status != "closed"]
-        elif filter_type == "partial":
-            loans = [loan for loan in loans if loan.status == "partial"]
+            return [loan for loan in loans if date.fromisoformat(loan.due_date) == today]
+        if filter_type == "soon":
+            return [loan for loan in loans if 1 <= (date.fromisoformat(loan.due_date) - today).days <= 3]
+        if filter_type == "overdue":
+            return [loan for loan in loans if date.fromisoformat(loan.due_date) < today and loan.status != "closed"]
+        if filter_type == "partial":
+            return [loan for loan in loans if loan.status == "partial"]
         return loans
 
     def get_loan(self, loan_id: str) -> LoanRecord | None:

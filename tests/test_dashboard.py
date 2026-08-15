@@ -2,6 +2,7 @@ import flet as ft
 
 from app.services.fake_services import FakeInventoryService
 from app.views.dashboard import DashboardView
+from tests.test_auth_fixtures import admin_user
 
 
 def test_dashboard_has_three_management_dialogs() -> None:
@@ -21,7 +22,7 @@ def test_dashboard_has_three_management_dialogs() -> None:
 
 def test_dashboard_updates_inventory_from_management_dialog() -> None:
     service = FakeInventoryService()
-    view = DashboardView(service)
+    view = DashboardView(service, current_user=admin_user())
     view.manage_unit.value = "unit-1"
     view.manage_action.value = "relocate"
     view.manage_location.value = "Lab B"
@@ -159,7 +160,7 @@ def test_dashboard_uses_clear_inventory_levels() -> None:
 
 
 def test_dashboard_creates_category_and_uses_it_in_equipment_dropdown() -> None:
-    view = DashboardView(FakeInventoryService())
+    view = DashboardView(FakeInventoryService(), current_user=admin_user())
     view.category_name.value = "หนังสือวิทยาศาสตร์"
 
     view._save_category(None)

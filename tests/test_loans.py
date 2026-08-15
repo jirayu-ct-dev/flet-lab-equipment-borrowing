@@ -2,6 +2,7 @@ import flet as ft
 
 from app.services.fake_services import FakeInventoryService, HistoryEvent
 from app.views.loans import LoansView
+from tests.test_auth_fixtures import admin_user
 
 
 def test_fake_inventory_service_can_return_active_loan_unit() -> None:
@@ -27,7 +28,7 @@ def test_fake_inventory_service_can_return_active_loan_unit() -> None:
 
 def test_loans_view_can_select_and_confirm_return() -> None:
     service = FakeInventoryService()
-    view = LoansView(service)
+    view = LoansView(service, current_user=admin_user())
 
     assert view.receiving_staff_dropdown.value == "ST-001"
     assert view.return_location_dropdown.value is not None

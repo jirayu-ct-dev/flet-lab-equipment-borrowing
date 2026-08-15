@@ -27,6 +27,6 @@ def test_container_seeds_demo_data_when_enabled(tmp_path, monkeypatch) -> None:
 
     services = create_app_services()
 
-    assert len(services.inventory_service.list_units()) == 50
+    assert len(services.inventory_service.list_units()) == 58
     assert len(services.inventory_service.list_borrowers()) == 5
     assert len(services.inventory_service.list_loans()) == 5

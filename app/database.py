@@ -261,6 +261,33 @@ MIGRATIONS: tuple[str, ...] = (
         applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
     """,
+    """
+    CREATE TABLE app_users (
+        id INTEGER PRIMARY KEY,
+        role TEXT NOT NULL CHECK (role IN ('admin','user')),
+        email TEXT UNIQUE,
+        password_hash TEXT,
+        line_sub TEXT UNIQUE,
+        display_name TEXT NOT NULL,
+        staff_id INTEGER UNIQUE REFERENCES staff(id),
+        borrower_id INTEGER UNIQUE REFERENCES borrowers(id),
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+        must_change_password INTEGER NOT NULL DEFAULT 0,
+        last_login_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        CHECK ((email IS NOT NULL) OR (line_sub IS NOT NULL))
+    );
+
+    CREATE TABLE app_sessions (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES app_users(id),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        expires_at TEXT NOT NULL
+    );
+
+    CREATE INDEX idx_app_sessions_user ON app_sessions(user_id);
+    """,
 )
 
 

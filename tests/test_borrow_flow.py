@@ -3,6 +3,7 @@ from datetime import timedelta
 from app.services.fake_services import FakeInventoryService
 from app.database import bangkok_today
 from app.views.borrow_flow import BorrowFlowView
+from tests.test_auth_fixtures import admin_user
 
 
 def test_borrow_flow_defaults_to_three_day_due_date() -> None:
@@ -13,7 +14,7 @@ def test_borrow_flow_defaults_to_three_day_due_date() -> None:
 
 def test_borrow_flow_saves_and_confirms_in_one_action() -> None:
     service = FakeInventoryService()
-    view = BorrowFlowView(service)
+    view = BorrowFlowView(service, current_user=admin_user())
     view.borrower_dropdown.value = "BR-001"
     view.staff_dropdown.value = "ST-001"
     view.unit_dropdown.value = "unit-1"
