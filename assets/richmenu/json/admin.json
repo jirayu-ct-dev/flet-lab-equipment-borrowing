@@ -1,0 +1,83 @@
+{
+  "size": {
+    "width": 2500,
+    "height": 1686
+  },
+  "selected": true,
+  "name": "Admin Richmenu",
+  "chatBarText": "เมนูผู้ดูแล",
+  "areas": [
+    {
+      "bounds": {
+        "x": 64,
+        "y": 68,
+        "width": 776,
+        "height": 767
+      },
+      "action": {
+        "type": "uri",
+        "uri": "https://liff.line.me/2011123915-2iogJa84/inventory"
+      }
+    },
+    {
+      "bounds": {
+        "x": 865,
+        "y": 66,
+        "width": 776,
+        "height": 767
+      },
+      "action": {
+        "type": "uri",
+        "uri": "https://liff.line.me/2011123915-2iogJa84/people"
+      }
+    },
+    {
+      "bounds": {
+        "x": 1663,
+        "y": 72,
+        "width": 776,
+        "height": 767
+      },
+      "action": {
+        "type": "uri",
+        "uri": "https://liff.line.me/2011123915-2iogJa84/borrow"
+      }
+    },
+    {
+      "bounds": {
+        "x": 66,
+        "y": 841,
+        "width": 776,
+        "height": 767
+      },
+      "action": {
+        "type": "uri",
+        "uri": "https://liff.line.me/2011123915-2iogJa84/returns"
+      }
+    },
+    {
+      "bounds": {
+        "x": 864,
+        "y": 847,
+        "width": 776,
+        "height": 767
+      },
+      "action": {
+        "type": "uri",
+        "uri": "https://liff.line.me/2011123915-2iogJa84/history"
+      }
+    },
+    {
+      "bounds": {
+        "x": 1662,
+        "y": 842,
+        "width": 776,
+        "height": 767
+      },
+      "action": {
+        "type": "uri",
+        "uri": "https://liff.line.me/2011123915-2iogJa84/dashboard"
+      }
+    }
+  ]
+}
