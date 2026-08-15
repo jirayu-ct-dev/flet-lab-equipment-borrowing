@@ -323,7 +323,7 @@ def build_table_surface(
     on the next rebuild (e.g. after a refresh).
     """
     table.width = (
-        max(initial_width - 26, table_width)
+        max(initial_width - 24, table_width)
         if initial_width is not None
         else table_width
     )
@@ -337,7 +337,7 @@ def build_table_surface(
     surface.width = float("inf")
 
     def handle_size(e: ft.LayoutSizeChangeEvent) -> None:
-        table.width = max(e.width - 26, table_width)
+        table.width = max(e.width - 24, table_width)
         if on_resized is not None:
             on_resized(e.width)
         update_control(table)

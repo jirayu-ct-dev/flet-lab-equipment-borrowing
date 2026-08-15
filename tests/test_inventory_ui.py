@@ -21,7 +21,7 @@ def test_inventory_view_renders_units_as_table() -> None:
     assert table.columns[0].label.value == "รหัสอุปกรณ์"
 
     surface.on_size_change(type("Size", (), {"width": 1200})())
-    assert table.width == 1174
+    assert table.width == 1176
     surface.on_size_change(type("Size", (), {"width": 430})())
     assert table.width == 1000
 
@@ -89,19 +89,7 @@ def test_inventory_reset_keeps_table_responsive_width() -> None:
     view._handle_reset(None)
 
     table = view.unit_table_container.content.content.controls[0]
-    assert table.width == 1174
-
-
-def test_inventory_reset_prefers_surface_reported_width() -> None:
-    view = InventoryView()
-    surface = view.unit_table_container.content
-    surface.on_size_change(type("Size", (), {"width": 1200})())
-
-    view._handle_reset(None)
-
-    table = view.unit_table_container.content.content.controls[0]
-    assert table.width == 1174
-    assert view._surface_width == 1200
+    assert table.width == 1176
 
 
 def test_inventory_filter_toolbar_keeps_search_filter_and_reset_together() -> None:

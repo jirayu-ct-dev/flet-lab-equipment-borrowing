@@ -164,7 +164,7 @@ def test_loans_refresh_keeps_table_responsive_width() -> None:
     view._handle_refresh(None)
 
     table = view.loan_container.content.content.controls[0]
-    assert table.width == 1574
+    assert table.width == 1576
 
 
 def test_loans_refresh_prefers_surface_reported_width() -> None:
@@ -175,7 +175,7 @@ def test_loans_refresh_prefers_surface_reported_width() -> None:
     view._handle_refresh(None)
 
     table = view.loan_container.content.content.controls[0]
-    assert table.width == 1174
+    assert table.width == 1176
     assert view._surface_width == 1200
 
 
