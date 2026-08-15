@@ -30,6 +30,7 @@ class HistoryView(ft.Container):
         self.service = service or FakeInventoryService()
         self.mobile = mobile
         self._table_width: float | None = None
+        self._surface_width: float | None = None
 
         # --------------------------------------------------
         # Search fields
@@ -291,8 +292,18 @@ class HistoryView(ft.Container):
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
         self.history_container.content = build_table_surface(
-            table, table_width=1250, initial_width=self._table_width
+            table,
+            table_width=1250,
+            initial_width=(
+                self._surface_width
+                if self._surface_width is not None
+                else self._table_width
+            ),
+            on_resized=self._record_surface_width,
         )
+
+    def _record_surface_width(self, width: float) -> None:
+        self._surface_width = width
 
     # ======================================================
     # TRANSLATE EVENT

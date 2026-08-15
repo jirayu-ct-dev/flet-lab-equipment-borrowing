@@ -110,15 +110,16 @@ def test_loans_view_switches_table_and_cards_across_breakpoint() -> None:
 def test_loans_view_uses_full_width_filter_and_stacked_return_fields() -> None:
     view = LoansView(FakeInventoryService())
 
-    filter_column = view.content.controls[1].content
-    assert filter_column.controls[0] is view.search_field
-    filter_row = filter_column.controls[1]
-    assert isinstance(filter_row, ft.Row)
-    assert filter_row.controls[0] is view.filter_dropdown
-    refresh_button = filter_row.controls[1]
+    filter_toolbar = view.content.controls[1].content.controls[0]
+    assert isinstance(filter_toolbar, ft.ResponsiveRow)
+    assert filter_toolbar.controls[0].content is view.search_field
+    filter_actions = filter_toolbar.controls[1].content.controls
+    assert filter_actions[0] is view.filter_dropdown
+    refresh_button = filter_actions[1]
     assert refresh_button.content == "รีเฟรช"
     assert refresh_button.height == 52
-    assert view.filter_dropdown.expand is True
+    assert view.filter_dropdown.width == 320
+    assert view.filter_dropdown.height == 52
     assert view.filter_dropdown.border_radius == 12
     assert refresh_button.style.shape.radius == 12
     assert view.search_field.border_radius == 12
@@ -142,6 +143,20 @@ def test_loans_view_uses_full_width_filter_and_stacked_return_fields() -> None:
     )
 
 
+def test_loans_mobile_filter_stacks_search_above_filter_row() -> None:
+    view = LoansView(FakeInventoryService(), mobile=True)
+
+    filter_column = view.content.controls[1].content
+    assert isinstance(filter_column, ft.Column)
+    assert filter_column.controls[0] is view.search_field
+    row = filter_column.controls[1]
+    assert isinstance(row, ft.Row)
+    assert row.controls[0] is view.filter_dropdown
+    assert row.controls[1].content == "รีเฟรช"
+    assert view.filter_dropdown.width is None
+    assert view.filter_dropdown.expand is True
+
+
 def test_loans_refresh_keeps_table_responsive_width() -> None:
     view = LoansView(FakeInventoryService())
     view._handle_resize(type("Size", (), {"width": 1600})())
@@ -149,7 +164,19 @@ def test_loans_refresh_keeps_table_responsive_width() -> None:
     view._handle_refresh(None)
 
     table = view.loan_container.content.content.controls[0]
-    assert table.width == 1576
+    assert table.width == 1574
+
+
+def test_loans_refresh_prefers_surface_reported_width() -> None:
+    view = LoansView(FakeInventoryService())
+    surface = view.loan_container.content
+    surface.on_size_change(type("Size", (), {"width": 1200})())
+
+    view._handle_refresh(None)
+
+    table = view.loan_container.content.content.controls[0]
+    assert table.width == 1174
+    assert view._surface_width == 1200
 
 
 def test_loans_view_searches_by_loan_or_borrower_code() -> None:

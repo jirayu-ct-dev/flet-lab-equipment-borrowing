@@ -29,6 +29,7 @@ class StaffBorrowersView(ft.Container):
         self.service = service or FakeInventoryService()
         self.mobile = mobile
         self._table_width: float | None = None
+        self._surface_width: float | None = None
         self.selected_mode = "staff"
 
         self.staff_search = ft.TextField(
@@ -319,7 +320,13 @@ class StaffBorrowersView(ft.Container):
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
         self.staff_container.content = build_table_surface(
-            table, initial_width=self._table_width
+            table,
+            initial_width=(
+                self._surface_width
+                if self._surface_width is not None
+                else self._table_width
+            ),
+            on_resized=self._record_surface_width,
         )
 
     def _select_staff(self, code: str, name: str, email: str | None) -> None:
@@ -398,8 +405,18 @@ class StaffBorrowersView(ft.Container):
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
         self.borrower_container.content = build_table_surface(
-            table, table_width=1150, initial_width=self._table_width
+            table,
+            table_width=1150,
+            initial_width=(
+                self._surface_width
+                if self._surface_width is not None
+                else self._table_width
+            ),
+            on_resized=self._record_surface_width,
         )
+
+    def _record_surface_width(self, width: float) -> None:
+        self._surface_width = width
 
     def _select_borrower(self, code: str, name: str, dept: str | None, email: str | None) -> None:
         self.borrower_code.value = code

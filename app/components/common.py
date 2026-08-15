@@ -307,17 +307,23 @@ def build_table_surface(
     *,
     table_width: int = 1000,
     initial_width: float | None = None,
+    on_resized: Callable[[float], None] | None = None,
 ) -> ft.Container:
     """Show a consistent full-width table surface with mobile horizontal scroll.
 
-    ``initial_width`` is the last known rendered width of the surface (e.g. from
-    the owning view's resize handler). It lets a freshly rebuilt table keep its
-    responsive full-width layout immediately, instead of waiting for an
-    ``on_size_change`` event that does not re-fire when a same-size surface
-    replaces another one.
+    ``initial_width`` is the last known rendered width of the surface. It lets
+    a freshly rebuilt table keep its responsive full-width layout immediately,
+    instead of waiting for an ``on_size_change`` event that does not re-fire
+    when a same-size surface replaces another one. Prefer feeding this from
+    ``on_resized`` (the surface's own reported width) — it is exact, unlike a
+    view-level width that includes the scrollbar.
+
+    ``on_resized`` is called with the surface width whenever the surface
+    reports its size, so the owning view can reuse it as ``initial_width``
+    on the next rebuild (e.g. after a refresh).
     """
     table.width = (
-        max(initial_width - 24, table_width)
+        max(initial_width - 26, table_width)
         if initial_width is not None
         else table_width
     )
@@ -331,7 +337,9 @@ def build_table_surface(
     surface.width = float("inf")
 
     def handle_size(e: ft.LayoutSizeChangeEvent) -> None:
-        table.width = max(e.width - 24, table_width)
+        table.width = max(e.width - 26, table_width)
+        if on_resized is not None:
+            on_resized(e.width)
         update_control(table)
 
     surface.on_size_change = handle_size

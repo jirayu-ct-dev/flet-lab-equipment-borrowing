@@ -4,6 +4,7 @@ from app.components.common import (
     build_card,
     build_card_list,
     build_data_card,
+    build_filter_bar,
     build_page_header,
     build_state_view,
     build_status_chip,
@@ -27,6 +28,7 @@ class InventoryView(ft.Container):
         self.service = service or FakeInventoryService()
         self.mobile = mobile
         self._table_width: float | None = None
+        self._surface_width: float | None = None
         self.search_field = ft.TextField(
             label="ค้นหารหัสหรือชื่ออุปกรณ์",
             hint_text="เช่น Microscope หรือ AST-001",
@@ -101,42 +103,51 @@ class InventoryView(ft.Container):
         self._render_units()
 
     def _build_filter_bar(self) -> ft.Control:
-        self.search_field.width = None
-        self.search_field.expand = True
-        self.reset_button.expand = False
+        self.reset_button.expand = None
         self.reset_button.icon = None
         self.reset_button.style = ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
             padding=ft.Padding.symmetric(horizontal=12),
         )
         if self.mobile:
+            self.search_field.width = None
+            self.search_field.expand = True
             self.status_dropdown.width = None
             self.category_dropdown.width = None
             self.status_dropdown.expand = True
             self.category_dropdown.expand = True
-        else:
-            self.status_dropdown.width = 180
-            self.category_dropdown.width = 180
-            self.status_dropdown.expand = False
-            self.category_dropdown.expand = False
-        return build_card(
-            content=ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[self.search_field, self.reset_button],
-                        spacing=8,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    ft.Row(
-                        controls=[self.status_dropdown, self.category_dropdown],
-                        spacing=8,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                ],
-                spacing=12,
-                tight=True,
-            ),
-            padding=16,
+            return build_card(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[self.search_field, self.reset_button],
+                            spacing=8,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Row(
+                            controls=[self.status_dropdown, self.category_dropdown],
+                            spacing=8,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                    ],
+                    spacing=12,
+                    tight=True,
+                ),
+                padding=16,
+            )
+        self.search_field.width = float("inf")
+        self.search_field.expand = None
+        self.status_dropdown.width = 180
+        self.category_dropdown.width = 180
+        self.status_dropdown.expand = None
+        self.category_dropdown.expand = None
+        return build_filter_bar(
+            search_control=self.search_field,
+            action_controls=[
+                self.status_dropdown,
+                self.category_dropdown,
+                self.reset_button,
+            ],
         )
 
     def _render_units(self) -> None:
@@ -197,8 +208,17 @@ class InventoryView(ft.Container):
             horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
         )
         self.unit_table_container.content = build_table_surface(
-            table, initial_width=self._table_width
+            table,
+            initial_width=(
+                self._surface_width
+                if self._surface_width is not None
+                else self._table_width
+            ),
+            on_resized=self._record_surface_width,
         )
+
+    def _record_surface_width(self, width: float) -> None:
+        self._surface_width = width
 
     def _handle_search(self, e: ft.ControlEvent | None) -> None:
         self._render_units()

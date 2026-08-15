@@ -52,7 +52,7 @@ def test_history_clear_keeps_table_responsive_width() -> None:
     view._handle_clear(None)
 
     table = view.history_container.content.content.controls[0]
-    assert table.width == 1576
+    assert table.width == 1574
 
 
 def test_history_filter_uses_original_multi_row_layout() -> None:

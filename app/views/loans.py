@@ -4,6 +4,7 @@ from app.components.common import (
     build_card,
     build_card_list,
     build_data_card,
+    build_filter_bar,
     build_form_dialog,
     build_page_header,
     build_state_view,
@@ -29,6 +30,7 @@ class LoansView(ft.Container):
         self.service = service or FakeInventoryService()
         self.mobile = mobile
         self._table_width: float | None = None
+        self._surface_width: float | None = None
 
         self.search_field = ft.TextField(
             label="ค้นหารายการยืมหรือผู้ยืม",
@@ -138,32 +140,42 @@ class LoansView(ft.Container):
             icon=ft.Icons.RECEIPT_LONG,
         )
 
-        filter_bar = build_card(
-            content=ft.Column(
-                controls=[
-                    self.search_field,
-                    ft.Row(
-                        controls=[
-                            self.filter_dropdown,
-                            ft.OutlinedButton(
-                                "รีเฟรช",
-                                icon=ft.Icons.REFRESH,
-                                height=52,
-                                style=ft.ButtonStyle(
-                                    shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
-                                ),
-                                on_click=self._handle_refresh,
-                            ),
-                        ],
-                        spacing=8,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                ],
-                spacing=12,
-                tight=True,
+        refresh_button = ft.OutlinedButton(
+            "รีเฟรช",
+            icon=ft.Icons.REFRESH,
+            height=52,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
             ),
-            padding=16,
+            on_click=self._handle_refresh,
         )
+        if self.mobile:
+            self.search_field.width = float("inf")
+            self.filter_dropdown.width = None
+            self.filter_dropdown.expand = True
+            filter_bar = build_card(
+                content=ft.Column(
+                    controls=[
+                        self.search_field,
+                        ft.Row(
+                            controls=[self.filter_dropdown, refresh_button],
+                            spacing=8,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                    ],
+                    spacing=12,
+                    tight=True,
+                ),
+                padding=16,
+            )
+        else:
+            self.search_field.width = float("inf")
+            self.filter_dropdown.width = 320
+            self.filter_dropdown.expand = None
+            filter_bar = build_filter_bar(
+                search_control=self.search_field,
+                action_controls=[self.filter_dropdown, refresh_button],
+            )
 
         self.content = ft.Column(
             controls=[
@@ -290,7 +302,14 @@ class LoansView(ft.Container):
                 horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
             )
             self.loan_container.content = build_table_surface(
-                table, table_width=1150, initial_width=self._table_width
+                table,
+                table_width=1150,
+                initial_width=(
+                    self._surface_width
+                    if self._surface_width is not None
+                    else self._table_width
+                ),
+                on_resized=self._record_surface_width,
             )
 
         if self.selected_loan is not None:
@@ -410,9 +429,12 @@ class LoansView(ft.Container):
         self._update_confirmation_summary()
         update_control(self)
 
+    def _record_surface_width(self, width: float) -> None:
+        self._surface_width = width
+
     def _handle_resize(self, e: ft.LayoutSizeChangeEvent) -> None:
         self._table_width = e.width
-        handle_mobile_resize(self, self._render_loans, e)
+        handle_mobile_resize(self, self._build_view, e)
 
     def _handle_filter_change(self, e: ft.ControlEvent) -> None:
         self._render_loans()

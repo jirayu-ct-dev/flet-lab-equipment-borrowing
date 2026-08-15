@@ -123,6 +123,7 @@ def build_app_shell(
     # ========================================================
 
     def navigate_to(index: int) -> None:
+        is_mobile = mobile_navigation.visible
         mobile_navigation.selected_index = index
 
         for tile_index, tile in enumerate(menu_tiles):
@@ -136,17 +137,17 @@ def build_app_shell(
 
         if index == 0:
             content_area.content = build_screen(
-                DashboardView(service, mobile=mobile)
+                DashboardView(service, mobile=is_mobile)
             )
 
         elif index == 1:
             content_area.content = build_screen(
-                build_inventory_view(service, mobile=mobile)
+                build_inventory_view(service, mobile=is_mobile)
             )
 
         elif index == 2:
             content_area.content = build_screen(
-                StaffBorrowersView(service, mobile=mobile)
+                StaffBorrowersView(service, mobile=is_mobile)
             )
 
         elif index == 3:
@@ -156,17 +157,17 @@ def build_app_shell(
 
         elif index == 4:
             content_area.content = build_screen(
-                LoansView(service, mobile=mobile)
+                LoansView(service, mobile=is_mobile)
             )
 
         elif index == 5:
             content_area.content = build_screen(
-                build_history_view(service, mobile=mobile)
+                build_history_view(service, mobile=is_mobile)
             )
 
         else:
             content_area.content = build_screen(
-                DashboardView(service, mobile=mobile)
+                DashboardView(service, mobile=is_mobile)
             )
 
         update_control(navigation_menu)
@@ -207,7 +208,7 @@ def build_app_shell(
 
     mobile_navigation = ft.NavigationBar(
         selected_index=0,
-        visible=False,
+        visible=mobile,
         label_behavior=ft.NavigationBarLabelBehavior.ONLY_SHOW_SELECTED,
         destinations=[
             ft.NavigationBarDestination(

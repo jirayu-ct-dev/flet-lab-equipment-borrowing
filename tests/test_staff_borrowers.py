@@ -121,12 +121,12 @@ def test_people_reset_keeps_table_responsive_width() -> None:
 
     view._handle_staff_reset(None)
     staff_table = view.staff_container.content.content.controls[0]
-    assert staff_table.width == 1576
+    assert staff_table.width == 1574
 
     view._switch_to_borrowers(None)
     view._handle_borrower_reset(None)
     borrower_table = view.borrower_container.content.content.controls[0]
-    assert borrower_table.width == 1576
+    assert borrower_table.width == 1574
 
 
 def test_people_search_toolbars_keep_search_reset_and_add_together() -> None:

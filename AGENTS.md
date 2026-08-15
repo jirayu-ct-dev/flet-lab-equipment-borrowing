@@ -39,6 +39,10 @@ docker compose up --build -d                    # → http://localhost:8080
 - Times are persisted as UTC ISO strings ending in `Z`; calendar dates derive from
   `Asia/Bangkok` via `bangkok_today()`/`bangkok_date()`. Never compare business dates
   against raw timestamps.
+- Flet 0.86 layout gotcha: **never assign `expand = False`** — it corrupts the whole
+  enclosing `Row`/`ResponsiveRow` (renders as two full-height panels). Use
+  `expand = None` to un-flex. Guarded by `tests/test_layout_guards.py`; debugging
+  playbook in `.agents/skills/flet-layout-debug/SKILL.md`.
 
 ### Testing
 
