@@ -129,6 +129,18 @@ def update_status(database_path: DatabasePath, user_id: int, status: str) -> Non
     )
 
 
+def update_role(database_path: DatabasePath, user_id: int, role: str) -> None:
+    _write(
+        database_path,
+        """
+        UPDATE app_users
+        SET role = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?
+        """,
+        (role, user_id),
+    )
+
+
 def update_last_login(database_path: DatabasePath, user_id: int, now: datetime) -> None:
     _write(
         database_path,

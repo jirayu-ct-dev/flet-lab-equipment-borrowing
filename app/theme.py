@@ -105,7 +105,16 @@ NAVIGATION_ITEMS = [
     {"label": "ทำรายการยืม", "icon": ft.Icons.ASSIGNMENT_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT, "route": "borrow", "permission": Permission.MANAGE_LOANS},
     {"label": "คืนอุปกรณ์", "icon": ft.Icons.RECEIPT_LONG_OUTLINED, "selected_icon": ft.Icons.RECEIPT_LONG, "route": "returns", "permission": Permission.MANAGE_LOANS},
     {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED, "selected_icon": ft.Icons.HISTORY, "route": "history", "permission": Permission.VIEW_HISTORY},
+    {"label": "แจ้งหาย", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED, "selected_icon": ft.Icons.REPORT_PROBLEM, "route": "report_lost", "permission": Permission.VIEW_MY_LOANS},
 ]
+
+
+def find_nav_item(route: str) -> dict | None:
+    """Return the NAVIGATION_ITEMS entry for a route (None if not in nav)."""
+    return next(
+        (item for item in NAVIGATION_ITEMS if item["route"] == route),
+        None,
+    )
 
 
 def visible_navigation_items(user: AppUser | None) -> list[dict]:

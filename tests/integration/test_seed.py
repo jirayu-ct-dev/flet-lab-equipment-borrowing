@@ -52,7 +52,7 @@ def test_demo_seed_is_complete_and_idempotent(tmp_path) -> None:
         "equipment_categories": 9,
         "locations": 5,
         "staff": 3,
-        "borrowers": 5,
+        "borrowers": 6,
         "equipment": 29,
         "equipment_units": 58,
         "borrow_transactions": 5,
@@ -73,7 +73,7 @@ def test_demo_seed_is_complete_and_idempotent(tmp_path) -> None:
         "reported_lost": 1,
     }
     assert users == [
-        ("admin@lab.local", "admin", 1, None, 1),
+        ("admin@lab.local", "admin", 1, 6, 1),
         ("borrower@lab.local", "user", None, 1, 0),
     ]
 

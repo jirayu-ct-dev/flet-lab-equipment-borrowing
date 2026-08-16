@@ -5,6 +5,7 @@ from app.services.edits import SQLiteAuditLogService, SQLiteLoanEditService
 from app.services.fake_services import FakeInventoryService
 from app.services.loans import SQLiteLoanService
 from app.services.lost_cases import SQLiteLostCaseService
+from app.services.lost_reports import SQLiteLostReportService
 from app.services.master_data import (
     SQLiteBorrowerService,
     SQLiteEquipmentService,
@@ -24,6 +25,7 @@ __all__ = [
     "SQLiteEquipmentService",
     "SQLiteLocationService",
     "SQLiteLostCaseService",
+    "SQLiteLostReportService",
     "SQLiteLoanEditService",
     "SQLiteLoanQueryService",
     "SQLiteLoanService",

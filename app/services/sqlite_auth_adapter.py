@@ -112,6 +112,15 @@ class SQLiteAuthAdapter:
             raise NotFoundError("user", user_id)
         auth_repository.update_status(self.database_path, user_id, status.value)
 
+    def set_user_role(
+        self, user_id: int, new_role: Role, *, actor: AppUser
+    ) -> AppUser:
+        check_manage_users(actor)
+        if auth_repository.get_user(self.database_path, user_id) is None:
+            raise NotFoundError("user", user_id)
+        auth_repository.update_role(self.database_path, user_id, new_role.value)
+        return self._get_required(user_id)
+
     def change_password(self, user_id: int, command: ChangePasswordCommand) -> None:
         row = auth_repository.get_user(self.database_path, user_id)
         if row is None:

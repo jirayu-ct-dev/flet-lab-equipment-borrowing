@@ -40,6 +40,12 @@ class LostResolution(StrEnum):
     WAIVED = "waived"
 
 
+class LostReportStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class LoanQueryState(StrEnum):
     ACTIVE = "active"
     PARTIAL = "partial"
@@ -174,6 +180,22 @@ class LostCase:
     resolved_at: datetime | None
     replacement_unit_id: int | None
     note: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LostReport:
+    id: int
+    borrower_id: int
+    equipment_unit_id: int
+    reported_at: datetime
+    lost_date: str | None
+    location: str | None
+    description: str | None
+    status: LostReportStatus
+    reviewed_by_staff_id: int | None
+    reviewed_at: datetime | None
+    review_note: str | None
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,6 +429,22 @@ class ResolveLostCase:
 
 
 @dataclass(frozen=True, slots=True)
+class CreateLostReport:
+    borrower_id: int
+    equipment_unit_id: int
+    lost_date: str | None = None
+    location: str | None = None
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewLostReport:
+    approved: bool
+    reviewed_by_staff_id: int
+    review_note: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class EditLoanDetails:
     due_date: date
     purpose: str | None
@@ -532,6 +570,17 @@ class LostCaseService(Protocol):
 
 
 @runtime_checkable
+class LostReportService(Protocol):
+    def create_report(self, command: CreateLostReport) -> LostReport: ...
+
+    def list_pending_reports(self) -> list[LostReport]: ...
+
+    def list_reports_for_borrower(self, borrower_id: int) -> list[LostReport]: ...
+
+    def review_report(self, report_id: int, command: ReviewLostReport) -> LostReport: ...
+
+
+@runtime_checkable
 class LoanEditService(Protocol):
     def edit_details(self, loan_id: int, command: EditLoanDetails) -> Loan: ...
 
@@ -642,6 +691,8 @@ class AuthService(Protocol):
     def create_user(self, command: CreateUserCommand, *, actor: AppUser) -> AppUser: ...
 
     def set_user_status(self, user_id: int, status: RecordStatus, *, actor: AppUser) -> None: ...
+
+    def set_user_role(self, user_id: int, new_role: Role, *, actor: AppUser) -> AppUser: ...
 
     def change_password(self, user_id: int, command: ChangePasswordCommand) -> None: ...
 

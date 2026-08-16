@@ -288,6 +288,23 @@ MIGRATIONS: tuple[str, ...] = (
 
     CREATE INDEX idx_app_sessions_user ON app_sessions(user_id);
     """,
+    """
+    CREATE TABLE lost_reports (
+        id INTEGER PRIMARY KEY,
+        borrower_id INTEGER NOT NULL REFERENCES borrowers(id),
+        equipment_unit_id INTEGER NOT NULL REFERENCES equipment_units(id),
+        reported_at TEXT NOT NULL,
+        lost_date TEXT,
+        location TEXT,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (status IN ('pending', 'approved', 'rejected')),
+        reviewed_by_staff_id INTEGER REFERENCES staff(id),
+        reviewed_at TEXT,
+        review_note TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    """,
 )
 
 

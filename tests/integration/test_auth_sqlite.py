@@ -76,7 +76,7 @@ def test_initialize_applies_auth_migration(tmp_path) -> None:
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
-    assert versions == [1, 2, 3, 4, 5, 6, 7]
+    assert versions == [1, 2, 3, 4, 5, 6, 7, 8]
     assert {"app_users", "app_sessions"} <= tables
 
 
@@ -272,3 +272,27 @@ def test_sessions_lifecycle_and_expiry(auth) -> None:
 
     auth.delete_session(valid_token)
     assert auth.get_session(valid_token) is None
+
+
+def test_set_user_role_updates_role(auth) -> None:
+    admin = _admin(auth)
+
+    updated = auth.set_user_role(2, Role.ADMIN, actor=admin)
+
+    assert updated.id == 2
+    assert updated.role is Role.ADMIN
+    assert auth.get(2).role is Role.ADMIN
+
+
+def test_set_user_role_requires_manage_users(auth) -> None:
+    borrower = _borrower(auth)
+
+    with pytest.raises(PermissionDenied):
+        auth.set_user_role(2, Role.ADMIN, actor=borrower)
+
+
+def test_set_user_role_unknown_user(auth) -> None:
+    admin = _admin(auth)
+
+    with pytest.raises(NotFoundError):
+        auth.set_user_role(999, Role.ADMIN, actor=admin)

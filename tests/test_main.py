@@ -45,7 +45,7 @@ def test_navigation_items_include_expected_sections() -> None:
     items = get_navigation_items()
     labels = [item["label"] for item in items]
 
-    assert labels == ["Dashboard", "อุปกรณ์", "ของฉัน", "คนในระบบ", "ทำรายการยืม", "คืนอุปกรณ์", "ประวัติ"]
+    assert labels == ["Dashboard", "อุปกรณ์", "ของฉัน", "คนในระบบ", "ทำรายการยืม", "คืนอุปกรณ์", "ประวัติ", "แจ้งหาย"]
 
 
 def test_build_app_shell_switches_content_on_navigation_change() -> None:

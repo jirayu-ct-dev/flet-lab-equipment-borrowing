@@ -132,6 +132,16 @@ class LostCaseAlreadyResolved(DomainError):
         )
 
 
+class ReportAlreadyReviewed(DomainError):
+    code = "report_already_reviewed"
+
+    def __init__(self, report_id: int, status: str) -> None:
+        super().__init__(
+            f"Lost report {report_id} has already been reviewed",
+            details={"report_id": report_id, "status": status},
+        )
+
+
 class AuthenticationError(DomainError):
     code = "authentication_error"
 

@@ -10,7 +10,8 @@ from app.components.common import (
     open_dialog,
     update_control,
 )
-from app.contracts import AppUser, Permission, has_permission
+from app.contracts import AppUser, Permission, ReviewLostReport, has_permission
+from app.errors import DomainError
 from app.services.fake_services import FakeInventoryService
 from app.theme import COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY
 
@@ -39,6 +40,8 @@ class DashboardView(ft.Container):
         self.feedback = ft.Text("", size=13, color=COLOR_TEXT_SECONDARY)
         self.inventory_table: ft.DataTable | None = None
         self.table_container = ft.Container(on_size_change=self._handle_table_size)
+        self.lost_feedback = ft.Text("", size=13, color=COLOR_TEXT_SECONDARY)
+        self.lost_reports_container = ft.Container()
 
         self.category_name = ft.TextField(
             label="ชื่อหมวดหมู่", hint_text="เช่น คอมพิวเตอร์ วิทยาศาสตร์ หรือเครื่องมือช่าง"
@@ -101,6 +104,7 @@ class DashboardView(ft.Container):
         self._build_view()
         self._refresh_metrics()
         self._refresh_table()
+        self._render_lost_reports()
         self.on_size_change = self._handle_resize
 
     def _build_dialogs(self) -> None:
@@ -314,8 +318,26 @@ class DashboardView(ft.Container):
             padding=20,
         )
         table_section.width = float("inf")
+        lost_section = build_card(
+            ft.Column(
+                controls=[
+                    ft.Text(
+                        "รายงานอุปกรณ์หายรอตรวจ",
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=COLOR_TEXT_PRIMARY,
+                    ),
+                    self.lost_feedback,
+                    self.lost_reports_container,
+                ],
+                spacing=12,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
+            padding=20,
+        )
+        lost_section.width = float("inf")
         self.content = ft.Column(
-            controls=[header, summary, table_section, self.feedback],
+            controls=[header, summary, table_section, lost_section, self.feedback],
             spacing=16,
             expand=True,
             scroll=ft.ScrollMode.AUTO,
@@ -393,7 +415,201 @@ class DashboardView(ft.Container):
         update_control(self.inventory_table)
 
     def _handle_resize(self, e: ft.LayoutSizeChangeEvent) -> None:
-        handle_mobile_resize(self, self._refresh_table, e)
+        handle_mobile_resize(self, self._refresh_table_and_lost_reports, e)
+
+    def _refresh_table_and_lost_reports(self) -> None:
+        self._refresh_table()
+        self._render_lost_reports()
+
+    def _admin_staff_id(self) -> int | None:
+        if self.current_user is not None and self.current_user.staff_id is not None:
+            return self.current_user.staff_id
+        staff = self.service.list_staff()
+        if not staff:
+            return None
+        try:
+            return int(str(staff[0].id).removeprefix("staff-"))
+        except ValueError:
+            return None
+
+    def _borrower_name_for(self, borrower_id: int) -> str:
+        for borrower in self.service.list_borrowers(include_inactive=True):
+            try:
+                if int(str(borrower.id).removeprefix("borrower-")) == borrower_id:
+                    return borrower.full_name
+            except ValueError:
+                continue
+        return str(borrower_id)
+
+    def _asset_code_for(self, unit_id: object) -> str | None:
+        for candidate in (unit_id, f"unit-{unit_id}"):
+            unit = self.service.get_unit_by_id(candidate)
+            if unit is not None:
+                return unit.asset_code
+        return None
+
+    @staticmethod
+    def _format_reported_at(value: object) -> str:
+        if value is None:
+            return "-"
+        if hasattr(value, "strftime"):
+            return value.strftime("%Y-%m-%d %H:%M")
+        return str(value)
+
+    def _review_actions_for(self, report_id: int, staff_id: int | None) -> list[ft.Control]:
+        if staff_id is None:
+            return []
+        return [
+            ft.Button(
+                "อนุมัติ",
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.GREEN_600,
+                on_click=lambda e, report_id=report_id: self._review_lost_report(
+                    report_id, True
+                ),
+            ),
+            ft.Button(
+                "ไม่อนุมัติ",
+                color=ft.Colors.WHITE,
+                bgcolor=ft.Colors.GREY_600,
+                on_click=lambda e, report_id=report_id: self._review_lost_report(
+                    report_id, False
+                ),
+            ),
+        ]
+
+    def _render_lost_reports(self) -> None:
+        reports = self.service.list_pending_lost_reports()
+        if not reports:
+            self.lost_reports_container.content = ft.Text(
+                "ไม่มีรายงานรอตรวจ", size=13, color=COLOR_TEXT_SECONDARY
+            )
+            return
+
+        staff_id = self._admin_staff_id()
+
+        if self.mobile:
+            self.lost_reports_container.content = build_card_list(
+                [
+                    build_data_card(
+                        title=self._asset_code_for(report.equipment_unit_id)
+                        or str(report.equipment_unit_id),
+                        icon=ft.Icons.REPORT_PROBLEM_OUTLINED,
+                        fields=[
+                            ("รหัสรายงาน", str(report.id)),
+                            ("ผู้แจ้ง", self._borrower_name_for(report.borrower_id)),
+                            ("วันที่แจ้ง", self._format_reported_at(report.reported_at)),
+                            ("รายละเอียด", report.description or "-"),
+                        ],
+                        full_width_fields=["รายละเอียด"],
+                        actions=[
+                            ft.Button(
+                                "อนุมัติ",
+                                color=ft.Colors.WHITE,
+                                bgcolor=ft.Colors.GREEN_600,
+                                expand=True,
+                                on_click=lambda e, report_id=report.id: self._review_lost_report(
+                                    report_id, True
+                                ),
+                            ),
+                            ft.Button(
+                                "ไม่อนุมัติ",
+                                color=ft.Colors.WHITE,
+                                bgcolor=ft.Colors.GREY_600,
+                                expand=True,
+                                on_click=lambda e, report_id=report.id: self._review_lost_report(
+                                    report_id, False
+                                ),
+                            ),
+                        ]
+                        if staff_id is not None
+                        else [],
+                    )
+                    for report in reports
+                ]
+            )
+            return
+
+        table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("รหัสรายงาน"), expand=1),
+                ft.DataColumn(ft.Text("ผู้แจ้ง"), expand=2),
+                ft.DataColumn(ft.Text("อุปกรณ์"), expand=2),
+                ft.DataColumn(ft.Text("วันที่แจ้ง"), expand=2),
+                ft.DataColumn(ft.Text("รายละเอียด"), expand=3),
+                ft.DataColumn(ft.Text("การจัดการ"), expand=2),
+            ],
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(str(report.id))),
+                        ft.DataCell(
+                            ft.Text(self._borrower_name_for(report.borrower_id))
+                        ),
+                        ft.DataCell(
+                            ft.Text(
+                                self._asset_code_for(report.equipment_unit_id)
+                                or str(report.equipment_unit_id),
+                                weight=ft.FontWeight.W_600,
+                            )
+                        ),
+                        ft.DataCell(
+                            ft.Text(self._format_reported_at(report.reported_at))
+                        ),
+                        ft.DataCell(ft.Text(report.description or "-")),
+                        ft.DataCell(
+                            ft.Row(
+                                controls=self._review_actions_for(
+                                    report.id, staff_id
+                                ),
+                                spacing=8,
+                                wrap=True,
+                            )
+                            if staff_id is not None
+                            else ft.Text("-")
+                        ),
+                    ]
+                )
+                for report in reports
+            ],
+            column_spacing=24,
+            horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
+            width=1000,
+        )
+        self.lost_reports_container.content = ft.Row(
+            controls=[table],
+            scroll=ft.ScrollMode.AUTO,
+        )
+
+    def _set_lost_feedback(self, message: str, *, error: bool) -> None:
+        self.lost_feedback.value = message
+        self.lost_feedback.color = ft.Colors.RED_700 if error else ft.Colors.GREEN_700
+        update_control(self)
+
+    def _review_lost_report(self, report_id: int, approved: bool) -> None:
+        if not has_permission(self.current_user, Permission.MANAGE_INVENTORY):
+            self._set_lost_feedback("คุณไม่มีสิทธิ์ทำรายการนี้", error=True)
+            return
+        staff_id = self._admin_staff_id()
+        if staff_id is None:
+            self._set_lost_feedback("ไม่พบข้อมูลเจ้าหน้าที่ในระบบ", error=True)
+            return
+        try:
+            self.service.review_lost_report(
+                report_id,
+                ReviewLostReport(
+                    approved=approved,
+                    reviewed_by_staff_id=staff_id,
+                    review_note=None,
+                ),
+            )
+        except DomainError as error:
+            self._set_lost_feedback(error.message, error=True)
+            return
+        self._set_lost_feedback("บันทึกผลการตรวจเรียบร้อย", error=False)
+        self._refresh_metrics()
+        self._refresh_table()
+        self._render_lost_reports()
 
     def _handle_category_dropdown_size(self, e: ft.LayoutSizeChangeEvent) -> None:
         self._handle_dropdown_size(self.equipment_category, e)

@@ -12,8 +12,10 @@ from app.contracts import (
     CreateDraftLoan,
     CreateEquipment,
     CreateLocation,
+    CreateLostReport,
     CreateStaff,
     EquipmentFilter,
+    LostReport,
     LostResolution,
     ReplacementUnit,
     RecordStatus,
@@ -23,6 +25,7 @@ from app.contracts import (
     ReturnOutcome,
     ResolveLostCase,
     RetireUnit,
+    ReviewLostReport,
     CompleteRepair,
     StaffFilter,
     UnitFilter,
@@ -52,6 +55,7 @@ from app.services.fake_services import (
 )
 from app.services.loans import SQLiteLoanService
 from app.services.lost_cases import SQLiteLostCaseService
+from app.services.lost_reports import SQLiteLostReportService
 from app.services.master_data import (
     SQLiteBorrowerService,
     SQLiteEquipmentService,
@@ -76,6 +80,23 @@ class SQLiteInventoryAdapter:
         self.loans = SQLiteLoanService(self.database_path)
         self.returns = SQLiteReturnService(self.database_path)
         self.lost_cases = SQLiteLostCaseService(self.database_path)
+        self.lost_reports = SQLiteLostReportService(self.database_path)
+
+    def create_lost_report(self, command: CreateLostReport) -> LostReport:
+        return self.lost_reports.create_report(command)
+
+    def list_pending_lost_reports(self) -> list[LostReport]:
+        return self.lost_reports.list_pending_reports()
+
+    def list_lost_reports_for_borrower(
+        self, borrower_id: int
+    ) -> list[LostReport]:
+        return self.lost_reports.list_reports_for_borrower(borrower_id)
+
+    def review_lost_report(
+        self, report_id: int, command: ReviewLostReport
+    ) -> LostReport:
+        return self.lost_reports.review_report(report_id, command)
 
     def list_lost_cases(
         self, *, query: str | None = None, status: str | None = None

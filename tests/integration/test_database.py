@@ -33,7 +33,7 @@ def test_initialize_is_idempotent_and_enables_foreign_keys(tmp_path) -> None:
         versions = database.execute(
             "SELECT version FROM schema_migrations"
         ).fetchall()
-        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7]
+        assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8]
         assert database.execute(
             "SELECT name FROM equipment_categories ORDER BY name"
         ).fetchall() == []
@@ -138,7 +138,7 @@ def test_existing_version_one_database_upgrades_through_all_migrations(tmp_path)
             )
         }
 
-    assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7]
+    assert [row["version"] for row in versions] == [1, 2, 3, 4, 5, 6, 7, 8]
     assert "location_id" in return_item_columns
     assert "replacement_unit_id" in lost_case_columns
     assert "category_id" in equipment_columns

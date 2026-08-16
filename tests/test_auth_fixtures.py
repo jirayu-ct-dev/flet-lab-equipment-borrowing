@@ -10,7 +10,7 @@ def admin_user() -> AppUser:
         display_name="ผู้ดูแลระบบ",
         email="admin@lab.local",
         staff_id=1,
-        borrower_id=None,
+        borrower_id=1,
         status=RecordStatus.ACTIVE,
         must_change_password=False,
         last_login_at=datetime(2026, 8, 15, tzinfo=timezone.utc),

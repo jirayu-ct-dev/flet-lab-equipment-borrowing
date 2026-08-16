@@ -6,6 +6,7 @@ from app.env import load_env_file
 from app.services.container import create_app_services
 from app.services.fake_services import FakeInventoryService
 from app.services.line_login import get_line_provider, register_or_fetch_user
+from app.services.line_messaging import sync_richmenu
 
 from app.theme import (
     APP_TITLE,
@@ -15,15 +16,19 @@ from app.theme import (
     COLOR_SIDEBAR_ACTIVE,
     COLOR_SIDEBAR_TEXT,
     MOBILE_BREAKPOINT,
+    find_nav_item,
     visible_navigation_items,
 )
 
 from app.views.borrow_flow import BorrowFlowView
+from app.views.contact import ContactView
 from app.views.dashboard import DashboardView
+from app.views.guide import build_guide_view
 from app.views.history import build_history_view
 from app.views.inventory import build_inventory_view
 from app.views.loans import LoansView
 from app.views.my_loans import MyLoansView
+from app.views.report_lost import ReportLostView
 from app.views.staff_borrowers import StaffBorrowersView
 
 
@@ -50,7 +55,30 @@ def get_navigation_items():
         {"label": "ทำรายการยืม", "icon": ft.Icons.ASSIGNMENT_OUTLINED},
         {"label": "คืนอุปกรณ์", "icon": ft.Icons.RECEIPT_LONG_OUTLINED},
         {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED},
+        {"label": "แจ้งหาย", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED},
     ]
+
+
+ROUTE_PERMISSIONS = {
+    "dashboard": Permission.VIEW_DASHBOARD,
+    "inventory": Permission.VIEW_INVENTORY,
+    "people": Permission.MANAGE_PEOPLE,
+    "borrow": Permission.MANAGE_LOANS,
+    "returns": Permission.MANAGE_LOANS,
+    "history": Permission.VIEW_HISTORY,
+    "my_loans": Permission.VIEW_MY_LOANS,
+    "report_lost": Permission.VIEW_MY_LOANS,
+    "guide": None,
+    "contact": None,
+}
+
+
+def resolve_route(page_route: str) -> str | None:
+    """Resolve a deep-link path (e.g. '/guide/') to a known route, else None."""
+    route = (page_route or "").strip("/")
+    if not route:
+        return None
+    return route if route in ROUTE_PERMISSIONS else None
 
 
 def build_screen(
@@ -127,6 +155,15 @@ def build_app_shell(
         if route == "history":
             return build_history_view(service, mobile=mobile)
 
+        if route == "report_lost":
+            return ReportLostView(service, current_user=current_user, mobile=mobile)
+
+        if route == "guide":
+            return build_guide_view(mobile=mobile)
+
+        if route == "contact":
+            return ContactView(service, mobile=mobile)
+
         return DashboardView(service, mobile=mobile, current_user=current_user)
 
     # ========================================================
@@ -191,6 +228,30 @@ def build_app_shell(
 
     def navigate_to(item: dict) -> None:
         is_mobile = mobile_navigation.visible
+        route = item.get("route", "dashboard")
+
+        if route in ("guide", "contact"):
+            if current_user is None:
+                _nav_feedback.value = "คุณไม่มีสิทธิ์เข้าถึงหน้านี้"
+                update_control(_nav_feedback)
+                return
+            if _nav_feedback.value:
+                _nav_feedback.value = ""
+                update_control(_nav_feedback)
+            content_area.content = build_screen(
+                render_view(item, is_mobile),
+                logout_action=logout_callback if is_mobile else None,
+            )
+            update_control(content_area)
+            return
+
+        if route == "report_lost" and (
+            current_user is None
+            or not has_permission(current_user, Permission.VIEW_MY_LOANS)
+        ):
+            _nav_feedback.value = "คุณไม่มีสิทธิ์เข้าถึงหน้านี้"
+            update_control(_nav_feedback)
+            return
 
         if current_user is not None and not has_permission(current_user, item["permission"]):
             _nav_feedback.value = "คุณไม่มีสิทธิ์เข้าถึงหน้านี้"
@@ -263,6 +324,7 @@ def build_app_shell(
         controls=menu_tiles,
         spacing=4,
         tight=True,
+        expand=True,
     )
 
     mobile_navigation = ft.NavigationBar(
@@ -291,18 +353,25 @@ def build_app_shell(
         display_name = current_user.display_name
         role_label = "ผู้ดูแลระบบ" if current_user.role == Role.ADMIN else "ผู้ใช้ทั่วไป"
 
-    logout_block = ft.Column(
+    logout_block = ft.Row(
         controls=[
-            ft.Text(
-                display_name,
-                size=13,
-                weight=ft.FontWeight.W_600,
-                color=COLOR_SIDEBAR_TEXT,
-            ),
-            ft.Text(
-                role_label,
-                size=11,
-                color=COLOR_SIDEBAR_TEXT,
+            ft.Column(
+                controls=[
+                    ft.Text(
+                        display_name,
+                        size=13,
+                        weight=ft.FontWeight.W_600,
+                        color=COLOR_SIDEBAR_TEXT,
+                    ),
+                    ft.Text(
+                        role_label,
+                        size=11,
+                        color=COLOR_SIDEBAR_TEXT,
+                    ),
+                ],
+                spacing=1,
+                tight=True,
+                expand=True,
             ),
             ft.OutlinedButton(
                 "ออกจากระบบ",
@@ -313,6 +382,7 @@ def build_app_shell(
             ),
         ],
         spacing=8,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
         tight=True,
     )
 
@@ -325,12 +395,11 @@ def build_app_shell(
             controls=[
                 brand_header,
                 navigation_menu,
+                _nav_feedback,
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT),
                 logout_block,
-                _nav_feedback,
             ],
             spacing=8,
-            tight=True,
         ),
     )
 
@@ -410,6 +479,22 @@ def main(
     page.add(root)
 
     login_view = None
+    shell: ft.Container | None = None
+    logged_in_user: AppUser | None = None
+
+    def apply_route(route: str) -> None:
+        if shell is None:
+            return
+        resolved = resolve_route(route or "")
+        if resolved is None:
+            return
+        required = ROUTE_PERMISSIONS.get(resolved)
+        if required is not None and not has_permission(logged_in_user, required):
+            return
+        item = find_nav_item(resolved)
+        if item is None:
+            item = {"label": resolved, "route": resolved, "permission": None}
+        shell.navigate_to(item)
 
     def _set_login_feedback(message: str) -> None:
         if login_view is not None:
@@ -431,7 +516,9 @@ def main(
             _set_login_feedback("ไม่สามารถดึงข้อมูลผู้ใช้ LINE ได้ กรุณาลองใหม่อีกครั้ง")
             return
         display_name = profile.get("displayName") or "ผู้ใช้ LINE"
-        handle_login_success(register_or_fetch_user(auth, profile.id, display_name))
+        user = register_or_fetch_user(auth, profile.id, display_name)
+        sync_richmenu(profile.id, user)
+        handle_login_success(user)
 
     def start_line_login() -> None:
         provider = get_line_provider()
@@ -466,15 +553,18 @@ def main(
         page.on_resize = lambda _: None
 
     def show_shell(user: AppUser) -> None:
+        nonlocal shell, logged_in_user
         shell = build_app_shell(
             services,
             width=page.width,
             current_user=user,
             on_logout=show_login,
         )
+        logged_in_user = user
         root.content = shell
         apply_shell_width(shell, page.width)
         page.on_resize = lambda _: apply_shell_width(shell, page.width)
+        apply_route(page.route)
 
     def handle_login_success(user: AppUser) -> None:
         page.session.store.set("user_id", user.id)
@@ -503,6 +593,8 @@ def main(
         show_shell(user)
     else:
         show_login()
+
+    page.on_route_change = lambda e: apply_route(e.route)
 
 
 if __name__ == "__main__":

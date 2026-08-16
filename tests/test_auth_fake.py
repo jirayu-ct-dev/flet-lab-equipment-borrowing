@@ -199,3 +199,27 @@ def test_list_users_exposes_all_users(service) -> None:
         "admin@lab.local",
         "borrower@lab.local",
     }
+
+
+def test_set_user_role_updates_role(service) -> None:
+    admin = _admin(service)
+
+    updated = service.set_user_role(2, Role.ADMIN, actor=admin)
+
+    assert updated.id == 2
+    assert updated.role is Role.ADMIN
+    assert service.get(2).role is Role.ADMIN
+
+
+def test_set_user_role_requires_manage_users(service) -> None:
+    borrower = _borrower(service)
+
+    with pytest.raises(PermissionDenied):
+        service.set_user_role(2, Role.ADMIN, actor=borrower)
+
+
+def test_set_user_role_unknown_user(service) -> None:
+    admin = _admin(service)
+
+    with pytest.raises(NotFoundError):
+        service.set_user_role(999, Role.ADMIN, actor=admin)

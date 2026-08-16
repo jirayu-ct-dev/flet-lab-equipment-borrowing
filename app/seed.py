@@ -8,7 +8,7 @@ from app.security import hash_password
 
 
 DEMO_SEED_KEY = "general-equipment-demo-v1"
-AUTH_SEED_KEY = "auth-demo-users-v1"
+AUTH_SEED_KEY = "auth-demo-users-v2"
 
 CATEGORIES = (
     "คอมพิวเตอร์และโน้ตบุ๊ก",
@@ -125,12 +125,36 @@ def _seed_demo_users(database_path: str | Path | None = None) -> bool:
             )
             database.execute(
                 """
+                INSERT OR IGNORE INTO borrowers(
+                    borrower_code, full_name, department, email, phone, note
+                ) VALUES (
+                    'BR-DEMO-006', 'กิตติพงศ์ เจ้าหน้าที่สาขา',
+                    'เจ้าหน้าที่สาขาวิทยาการคอมพิวเตอร์',
+                    'kittipong@example.com', '080-100-1001',
+                    'บัญชีผู้ยืมของผู้ดูแลระบบ (ผู้ดูแลก็ยืมอุปกรณ์ได้)'
+                )
+                """
+            )
+            admin_borrower_id = _optional_row_id(
+                database, "borrowers", "borrower_code", "BR-DEMO-006"
+            )
+            database.execute(
+                """
                 INSERT OR IGNORE INTO app_users(
                     role, email, password_hash, display_name, staff_id,
                     must_change_password
                 ) VALUES ('admin', 'admin@lab.local', ?, 'ผู้ดูแลระบบ', ?, 1)
                 """,
                 (hash_password("admin123"), admin_staff_id),
+            )
+            database.execute(
+                """
+                UPDATE app_users
+                SET borrower_id = ?,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE email = 'admin@lab.local' AND borrower_id IS NULL
+                """,
+                (admin_borrower_id,),
             )
             database.execute(
                 """

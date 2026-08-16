@@ -6,14 +6,25 @@ from datetime import date, datetime, timedelta
 from app.contracts import (
     AppUser,
     ChangePasswordCommand,
+    CreateLostReport,
     CreateUserCommand,
     LoginCommand,
+    LostReport,
+    LostReportStatus,
     RecordStatus,
     RegisterLineUser,
+    ReviewLostReport,
     Role,
 )
 from app.database import bangkok_today, utc_now
-from app.errors import AuthenticationError, DuplicateCodeError, NotFoundError
+from app.errors import (
+    AuthenticationError,
+    DuplicateCodeError,
+    InactiveRecordError,
+    NotFoundError,
+    ReportAlreadyReviewed,
+    ValidationError,
+)
 from app.security import hash_password
 from app.services.auth_service import (
     INACTIVE_USER_MESSAGE,
@@ -200,6 +211,7 @@ class FakeInventoryService:
                 reported_at=bangkok_today().isoformat(),
             )
         ]
+        self._lost_reports: list[LostReport] = []
 
     def list_lost_cases(
         self, *, query: str | None = None, status: str | None = None
@@ -254,6 +266,104 @@ class FakeInventoryService:
             self._lost_cases[index] = resolved
             return resolved
         return None
+
+    def create_lost_report(self, command: CreateLostReport) -> LostReport:
+        if not 1 <= command.borrower_id <= len(self._borrowers):
+            raise NotFoundError("borrower", command.borrower_id)
+        borrower = self._borrowers[command.borrower_id - 1]
+        if borrower.status != "active":
+            raise InactiveRecordError("borrower", command.borrower_id)
+        borrowed_unit_ids = {
+            unit_id
+            for loan in self._loans
+            if loan.borrower_code == borrower.borrower_code
+            for unit_id in loan.unit_ids
+            if unit_id not in loan.returned_unit_ids
+        }
+        if f"unit-{command.equipment_unit_id}" not in borrowed_unit_ids:
+            raise ValidationError(
+                "equipment unit is not currently borrowed by this borrower",
+                field="equipment_unit_id",
+            )
+        reported_at = utc_now()
+        report = LostReport(
+            id=len(self._lost_reports) + 1,
+            borrower_id=command.borrower_id,
+            equipment_unit_id=command.equipment_unit_id,
+            reported_at=reported_at,
+            lost_date=command.lost_date,
+            location=command.location,
+            description=command.description,
+            status=LostReportStatus.PENDING,
+            reviewed_by_staff_id=None,
+            reviewed_at=None,
+            review_note=None,
+            created_at=reported_at,
+        )
+        self._lost_reports.append(report)
+        return report
+
+    def list_pending_lost_reports(self) -> list[LostReport]:
+        return [
+            report
+            for report in self._lost_reports
+            if report.status is LostReportStatus.PENDING
+        ]
+
+    def list_lost_reports_for_borrower(
+        self, borrower_id: int
+    ) -> list[LostReport]:
+        return [
+            report
+            for report in self._lost_reports
+            if report.borrower_id == borrower_id
+        ]
+
+    def review_lost_report(
+        self, report_id: int, command: ReviewLostReport
+    ) -> LostReport:
+        for index, report in enumerate(self._lost_reports):
+            if report.id != report_id:
+                continue
+            if report.status is not LostReportStatus.PENDING:
+                raise ReportAlreadyReviewed(report_id, report.status.value)
+            if not 1 <= command.reviewed_by_staff_id <= len(self._staff):
+                raise NotFoundError("staff", command.reviewed_by_staff_id)
+            staff = self._staff[command.reviewed_by_staff_id - 1]
+            if staff.status != "active":
+                raise InactiveRecordError("staff", command.reviewed_by_staff_id)
+            reviewed = replace(
+                report,
+                status=(
+                    LostReportStatus.APPROVED
+                    if command.approved
+                    else LostReportStatus.REJECTED
+                ),
+                reviewed_by_staff_id=command.reviewed_by_staff_id,
+                reviewed_at=utc_now(),
+                review_note=command.review_note,
+            )
+            self._lost_reports[index] = reviewed
+            if command.approved:
+                unit = self._set_unit_state(
+                    f"unit-{report.equipment_unit_id}", "reported_lost"
+                )
+                assert unit is not None
+                borrower_code = self._borrowers[
+                    report.borrower_id - 1
+                ].borrower_code
+                self._lost_cases.append(
+                    LostCaseRecord(
+                        id=f"case-{len(self._lost_cases) + 1}",
+                        asset_code=unit.asset_code,
+                        equipment_name=unit.equipment_name,
+                        borrower_code=borrower_code,
+                        reported_at=bangkok_today().isoformat(),
+                        note=command.review_note,
+                    )
+                )
+            return reviewed
+        raise NotFoundError("lost_report", report_id)
 
     def list_history(
         self,
@@ -713,7 +823,7 @@ class FakeAuthService:
                 display_name="ผู้ดูแลระบบ",
                 email="admin@lab.local",
                 staff_id=None,
-                borrower_id=None,
+                borrower_id=1,
                 status=RecordStatus.ACTIVE,
                 must_change_password=True,
                 last_login_at=None,
@@ -724,7 +834,7 @@ class FakeAuthService:
                 display_name="ผู้ยืมทดสอบ",
                 email="borrower@lab.local",
                 staff_id=None,
-                borrower_id=None,
+                borrower_id=1,
                 status=RecordStatus.ACTIVE,
                 must_change_password=False,
                 last_login_at=None,
@@ -815,6 +925,18 @@ class FakeAuthService:
             replace(candidate, status=status) if candidate.id == user_id else candidate
             for candidate in self._users
         ]
+
+    def set_user_role(
+        self, user_id: int, new_role: Role, *, actor: AppUser
+    ) -> AppUser:
+        check_manage_users(actor)
+        if self.get(user_id) is None:
+            raise NotFoundError("user", user_id)
+        self._users = [
+            replace(candidate, role=new_role) if candidate.id == user_id else candidate
+            for candidate in self._users
+        ]
+        return self.get(user_id)  # type: ignore[return-value]
 
     def change_password(self, user_id: int, command: ChangePasswordCommand) -> None:
         user = self.get(user_id)

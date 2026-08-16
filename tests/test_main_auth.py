@@ -21,7 +21,7 @@ def test_borrower_shell_shows_only_permitted_menu_items() -> None:
     shell = build_app_shell(current_user=borrower_user())
 
     labels = [tile.title.value for tile in _shell_menu(shell).controls]
-    assert labels == ["อุปกรณ์", "ของฉัน", "ประวัติ"]
+    assert labels == ["อุปกรณ์", "ของฉัน", "ประวัติ", "แจ้งหาย"]
 
     assert isinstance(_shell_content_area(shell).content.content, InventoryView)
 
@@ -29,13 +29,13 @@ def test_borrower_shell_shows_only_permitted_menu_items() -> None:
 def test_admin_shell_shows_all_seven_menu_items() -> None:
     shell = build_app_shell(current_user=admin_user())
 
-    assert len(_shell_menu(shell).controls) == 7
+    assert len(_shell_menu(shell).controls) == 8
 
 
 def test_shell_without_user_keeps_legacy_full_menu() -> None:
     shell = build_app_shell()
 
-    assert len(_shell_menu(shell).controls) == 7
+    assert len(_shell_menu(shell).controls) == 8
 
 
 def test_admin_can_navigate_between_tiles() -> None:
@@ -106,5 +106,5 @@ def test_borrower_mobile_navigation_has_only_permitted_destinations() -> None:
     shell = build_app_shell(width=430, current_user=borrower_user())
 
     mobile_navigation = shell.content.controls[1]
-    assert len(mobile_navigation.destinations) == 3
-    assert [d.label for d in mobile_navigation.destinations] == ["อุปกรณ์", "ของฉัน", "ประวัติ"]
+    assert len(mobile_navigation.destinations) == 4
+    assert [d.label for d in mobile_navigation.destinations] == ["อุปกรณ์", "ของฉัน", "ประวัติ", "แจ้งหาย"]

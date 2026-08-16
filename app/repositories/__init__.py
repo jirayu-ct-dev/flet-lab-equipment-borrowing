@@ -3,6 +3,7 @@
 from app.repositories.master_data import MasterDataRepository
 from app.repositories.loans import LoanRepository
 from app.repositories.lost_cases import LostCaseRepository
+from app.repositories.lost_reports import LostReportRepository
 from app.repositories.returns import ReturnRepository
 from app.repositories.edits import AuditLogRepository, LoanEditRepository
 from app.repositories.queries import LoanQueryRepository
@@ -13,6 +14,7 @@ __all__ = [
     "LoanEditRepository",
     "LoanQueryRepository",
     "LostCaseRepository",
+    "LostReportRepository",
     "MasterDataRepository",
     "ReturnRepository",
 ]
