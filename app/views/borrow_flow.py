@@ -14,6 +14,7 @@ class BorrowFlowView(ft.Container):
         service: FakeInventoryService | None = None,
         *,
         current_user: AppUser | None = None,
+        notifier=None,
     ) -> None:
         super().__init__(
             expand=True,
@@ -22,6 +23,7 @@ class BorrowFlowView(ft.Container):
 
         self.service = service or FakeInventoryService()
         self.current_user = current_user
+        self.notifier = notifier
 
         borrowers = self.service.list_borrowers(include_inactive=False)
         staff = self.service.list_staff(include_inactive=False)
@@ -341,6 +343,14 @@ class BorrowFlowView(ft.Container):
             )
             self.summary.color = ft.Colors.GREEN_800
             self._refresh_units()
+
+            if self.notifier is not None:
+                self.notifier.notify_loan_created(
+                    borrower_code=borrower_code,
+                    transaction_code=confirmed.id,
+                    due_date=due_date,
+                    unit_count=len(confirmed.unit_ids),
+                )
 
         except Exception as exc:
             self._show_error(str(exc))

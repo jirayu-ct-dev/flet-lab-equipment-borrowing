@@ -3,7 +3,6 @@
     "width": 2500,
     "height": 1686
   },
-  "selected": true,
   "name": "Admin Richmenu",
   "chatBarText": "เมนูผู้ดูแล",
   "areas": [
@@ -79,5 +78,6 @@
         "uri": "https://liff.line.me/2011123915-2iogJa84/dashboard"
       }
     }
-  ]
+  ],
+  "selected": false
 }

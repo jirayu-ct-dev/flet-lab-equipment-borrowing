@@ -19,9 +19,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from app.env import load_env_file  # noqa: E402
-from app.services.line_messaging import LINE_API_BASE, LineMessagingService  # noqa: E402
+from app.services.line_messaging import (  # noqa: E402
+    LINE_API_BASE,
+    LINE_API_DATA_BASE,
+    LineMessagingService,
+)
 
 RICHMENUS = (
+    {"key": "NEW_USER", "name": "New User Richmenu", "json": "json/new-user.json", "image": "richmenuNewUser.jpg"},
     {"key": "ADMIN", "name": "Admin Richmenu", "json": "json/admin.json", "image": "richmenuAdmin.jpg"},
     {"key": "USER", "name": "User Richmenu", "json": "json/user.json", "image": "richmenuUser.jpg"},
 )
@@ -70,11 +75,21 @@ def register(script_dir: Path) -> dict[str, str]:
         image = (script_dir / menu["image"]).read_bytes()
         api_request(
             "POST",
-            f"{LINE_API_BASE}/v2/bot/richmenu/{richmenu_id}/content",
+            f"{LINE_API_DATA_BASE}/v2/bot/richmenu/{richmenu_id}/content",
             token=service.token,
             body=image,
             content_type="image/jpeg",
         )
+
+        if menu["key"] == "NEW_USER":
+            api_request(
+                "POST",
+                f"{LINE_API_BASE}/v2/bot/user/all/richmenu/{richmenu_id}",
+                token=service.token,
+                body=b"",
+            )
+            print(f"  ตั้งเป็น default richmenu")
+
         print(f"  สำเร็จ: {richmenu_id}")
         result[menu["key"]] = richmenu_id
 

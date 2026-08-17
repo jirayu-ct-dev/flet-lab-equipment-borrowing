@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from urllib.request import Request, urlopen
 
@@ -7,6 +8,7 @@ from app.contracts import AppUser
 from app.line_richmenu import get_richmenu_for_user
 
 LINE_API_BASE = "https://api.line.me"
+LINE_API_DATA_BASE = "https://api-data.line.me"
 _TIMEOUT_SECONDS = 10
 
 
@@ -57,6 +59,24 @@ class LineMessagingService:
             "DELETE",
             f"{LINE_API_BASE}/v2/bot/user/{line_user_id}/richmenu",
             token=self.token,
+        )
+
+    def send_text(self, line_user_id: str, text: str) -> None:
+        """ส่งข้อความธรรมดาไปยังผู้ใช้ (push message)"""
+        if not self.is_configured() or not line_user_id or not text:
+            return
+        body = json.dumps(
+            {
+                "to": line_user_id,
+                "messages": [{"type": "text", "text": text}],
+            }
+        ).encode("utf-8")
+        api_request(
+            "POST",
+            f"{LINE_API_BASE}/v2/bot/message/push",
+            token=self.token,
+            body=body,
+            content_type="application/json",
         )
 
 

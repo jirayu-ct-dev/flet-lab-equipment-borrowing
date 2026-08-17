@@ -1,3 +1,6 @@
+import asyncio
+import os
+
 import flet as ft
 
 from app.components.common import update_control
@@ -7,6 +10,7 @@ from app.services.container import create_app_services
 from app.services.fake_services import FakeInventoryService
 from app.services.line_login import get_line_provider, register_or_fetch_user
 from app.services.line_messaging import sync_richmenu
+from app.services.line_notify import LineNotificationService
 
 from app.theme import (
     APP_TITLE,
@@ -122,6 +126,7 @@ def build_app_shell(
     width: float | None = None,
     current_user: AppUser | None = None,
     on_logout=None,
+    notifier: LineNotificationService | None = None,
 ) -> ft.Container:
 
     service = get_service(services)
@@ -147,10 +152,10 @@ def build_app_shell(
             return StaffBorrowersView(service, mobile=mobile, current_user=current_user)
 
         if route == "borrow":
-            return BorrowFlowView(service, current_user=current_user)
+            return BorrowFlowView(service, current_user=current_user, notifier=notifier)
 
         if route == "returns":
-            return LoansView(service, mobile=mobile, current_user=current_user)
+            return LoansView(service, mobile=mobile, current_user=current_user, notifier=notifier)
 
         if route == "history":
             return build_history_view(service, mobile=mobile)
@@ -474,6 +479,21 @@ def main(
 
     services = create_app_services()
     auth = services.auth_service
+    notifier = LineNotificationService(
+        database_path=getattr(services.inventory_service, "database_path", None)
+    )
+
+    async def _due_reminder_loop() -> None:
+        interval = float(os.getenv("LINE_REMINDER_INTERVAL_SECONDS", "21600"))
+        while True:
+            try:
+                notifier.send_due_reminders()
+            except Exception:
+                pass
+            await asyncio.sleep(interval)
+
+    if notifier.is_configured():
+        page.run_task(_due_reminder_loop)
 
     root = ft.Container(expand=True)
     page.add(root)
@@ -559,6 +579,7 @@ def main(
             width=page.width,
             current_user=user,
             on_logout=show_login,
+            notifier=notifier,
         )
         logged_in_user = user
         root.content = shell

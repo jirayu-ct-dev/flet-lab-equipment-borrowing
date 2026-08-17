@@ -27,11 +27,13 @@ class LoansView(ft.Container):
         *,
         mobile: bool = False,
         current_user: AppUser | None = None,
+        notifier=None,
     ) -> None:
         super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
         self.mobile = mobile
         self.current_user = current_user
+        self.notifier = notifier
         self._table_width: float | None = None
         self._surface_width: float | None = None
 
@@ -498,6 +500,13 @@ class LoansView(ft.Container):
         self.feedback.color = ft.Colors.GREEN_700
         self.return_form_feedback.value = ""
         self.return_notes.value = ""
+
+        if self.notifier is not None:
+            self.notifier.notify_loan_returned(
+                borrower_code=result.borrower_code,
+                transaction_code=result.id,
+                returned_count=returned_count,
+            )
 
         if result.status == "closed":
             self.selected_loan = None

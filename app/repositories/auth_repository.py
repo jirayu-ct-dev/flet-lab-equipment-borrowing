@@ -90,6 +90,23 @@ def find_user_by_line_sub(database_path: DatabasePath, line_sub: str) -> dict | 
     return dict(row) if row is not None else None
 
 
+def find_line_sub_by_borrower_code(
+    database_path: DatabasePath, borrower_code: str
+) -> str | None:
+    """LINE user id (line_sub) linked to a borrower, or None."""
+    with connection(database_path) as database:
+        row = database.execute(
+            """
+            SELECT u.line_sub
+            FROM app_users u
+            JOIN borrowers b ON b.id = u.borrower_id
+            WHERE b.borrower_code = ? AND u.line_sub IS NOT NULL
+            """,
+            (borrower_code,),
+        ).fetchone()
+    return row["line_sub"] if row is not None else None
+
+
 def list_users(database_path: DatabasePath) -> list[dict]:
     with connection(database_path) as database:
         rows = database.execute(

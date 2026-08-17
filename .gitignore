@@ -6,3 +6,7 @@ __pycache__/
 data/
 
 .env
+
+# Postman export ?????? secret (access token / user IDs)
+assets/richmenu/*.postman_collection.json
+
