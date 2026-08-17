@@ -14,7 +14,7 @@ from app.components.common import (
     open_dialog,
     update_control,
 )
-from app.contracts import AppUser, Permission, has_permission
+from app.contracts import AppUser, AuthService, Permission, has_permission
 from app.services.fake_services import FakeInventoryService
 from app.theme import CONTROL_RADIUS
 
@@ -26,14 +26,17 @@ class StaffBorrowersView(ft.Container):
         *,
         mobile: bool = False,
         current_user: AppUser | None = None,
+        auth_service: AuthService | None = None,
     ) -> None:
         super().__init__(expand=True, padding=0)
         self.service = service or FakeInventoryService()
         self.mobile = mobile
         self.current_user = current_user
+        self.auth_service = auth_service
         self._table_width: float | None = None
         self._surface_width: float | None = None
         self.selected_mode = "staff"
+        self._line_borrower_dropdowns: dict[int, ft.Dropdown] = {}
 
         self.staff_search = ft.TextField(
             label="ค้นหาผู้บันทึกรายการ",
@@ -54,6 +57,16 @@ class StaffBorrowersView(ft.Container):
             on_change=self._handle_borrower_search,
         )
 
+        self.line_search = ft.TextField(
+            label="ค้นหาบัญชี LINE",
+            hint_text="ชื่อหรืออีเมล",
+            prefix_icon=ft.Icons.SEARCH,
+            width=float("inf"),
+            height=52,
+            border_radius=CONTROL_RADIUS,
+            on_change=self._handle_line_search,
+        )
+
         self.staff_name = ft.TextField(label="ชื่อผู้บันทึกรายการ", hint_text="เช่น สมชาย ใจดี", expand=True)
         self.staff_code = ft.TextField(label="รหัสผู้บันทึก", hint_text="เช่น ST-003", expand=True)
         self.staff_email = ft.TextField(label="อีเมล", hint_text="ada@example.com", expand=True)
@@ -66,6 +79,7 @@ class StaffBorrowersView(ft.Container):
         self.feedback = ft.Text("", size=13, color=ft.Colors.GREY_700, weight=ft.FontWeight.W_500)
         self.staff_container = ft.Container(expand=True)
         self.borrower_container = ft.Container(expand=True)
+        self.line_container = ft.Container(expand=True)
         self.mode_container = ft.Container(expand=True)
 
         self.btn_staff_tab = ft.Button(
@@ -81,6 +95,11 @@ class StaffBorrowersView(ft.Container):
             "ผู้ยืม",
             icon=ft.Icons.PERSON_SEARCH,
             on_click=self._switch_to_borrowers,
+        )
+        self.btn_line_tab = ft.OutlinedButton(
+            "บัญชี LINE",
+            icon=ft.Icons.CHAT_BUBBLE_OUTLINE,
+            on_click=self._switch_to_line,
         )
         self.staff_dialog = build_form_dialog(
             title="เพิ่มหรือแก้ไขผู้บันทึกรายการ",
@@ -128,6 +147,7 @@ class StaffBorrowersView(ft.Container):
             controls=[
                 self.btn_staff_tab,
                 self.btn_borrower_tab,
+                self.btn_line_tab,
             ],
             spacing=12,
         )
@@ -146,6 +166,7 @@ class StaffBorrowersView(ft.Container):
         self._refresh_mode_content()
         self._render_staff()
         self._render_borrowers()
+        self._render_line_users()
 
     def _build_staff_tab(self) -> ft.Control:
         search_card = build_filter_bar(
@@ -219,15 +240,54 @@ class StaffBorrowersView(ft.Container):
             spacing=16,
         )
 
+    def _build_line_tab(self) -> ft.Control:
+        if self.auth_service is None:
+            return build_state_view(
+                "ไม่มีบริการบัญชี LINE",
+                "กรุณาติดต่อผู้ดูแลระบบ",
+                icon=ft.Icons.CHAT_BUBBLE_OUTLINE,
+            )
+
+        search_card = build_filter_bar(
+            search_control=self.line_search,
+            action_controls=[
+                ft.OutlinedButton(
+                    "รีเฟรช",
+                    icon=ft.Icons.REFRESH,
+                    height=52,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=CONTROL_RADIUS),
+                    ),
+                    on_click=self._handle_line_reset,
+                ),
+            ],
+        )
+
+        return ft.Column(
+            controls=[
+                search_card,
+                self.feedback,
+                self.line_container,
+            ],
+            spacing=16,
+        )
+
     def _refresh_mode_content(self) -> None:
         if self.selected_mode == "staff":
             self.btn_staff_tab.style = ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_600)
             self.btn_borrower_tab.style = None
+            self.btn_line_tab.style = None
             self.mode_container.content = self._build_staff_tab()
-        else:
+        elif self.selected_mode == "borrowers":
             self.btn_borrower_tab.style = ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_600)
             self.btn_staff_tab.style = None
+            self.btn_line_tab.style = None
             self.mode_container.content = self._build_borrower_tab()
+        else:
+            self.btn_line_tab.style = ft.ButtonStyle(color=ft.Colors.WHITE, bgcolor=ft.Colors.BLUE_600)
+            self.btn_staff_tab.style = None
+            self.btn_borrower_tab.style = None
+            self.mode_container.content = self._build_line_tab()
 
     def _translate_status(self, status: str) -> str:
         return {
@@ -242,6 +302,11 @@ class StaffBorrowersView(ft.Container):
 
     def _switch_to_borrowers(self, e: ft.ControlEvent) -> None:
         self.selected_mode = "borrowers"
+        self._refresh_mode_content()
+        update_control(self)
+
+    def _switch_to_line(self, e: ft.ControlEvent) -> None:
+        self.selected_mode = "line"
         self._refresh_mode_content()
         update_control(self)
 
@@ -444,6 +509,7 @@ class StaffBorrowersView(ft.Container):
     def _rerender_lists(self) -> None:
         self._render_staff()
         self._render_borrowers()
+        self._render_line_users()
 
     def _handle_borrower_search(self, e: ft.ControlEvent) -> None:
         self._render_borrowers()
@@ -521,3 +587,185 @@ class StaffBorrowersView(ft.Container):
         self._render_borrowers()
         close_dialog(self, self.borrower_dialog)
         update_control(self)
+
+    def _render_line_users(self) -> None:
+        if self.auth_service is None:
+            return
+        keyword = (self.line_search.value or "").strip().lower()
+        users = [
+            user
+            for user in self.auth_service.list_users()
+            if user.line_sub is not None
+        ]
+        if keyword:
+            users = [
+                user
+                for user in users
+                if keyword in (user.display_name or "").lower()
+                or keyword in (user.email or "").lower()
+            ]
+
+        self._line_borrower_dropdowns.clear()
+        borrowers = [
+            item for item in self.service.list_borrowers(include_inactive=True)
+        ]
+        borrower_options = [
+            ft.dropdown.Option(
+                str(item.id), f"{item.borrower_code} — {item.full_name}"
+            )
+            for item in borrowers
+        ]
+
+        if not users:
+            self.line_container.content = build_state_view(
+                "ยังไม่มีบัญชี LINE",
+                "เมื่อผู้ใช้เข้าสู่ระบบด้วย LINE รายการจะแสดงที่นี่",
+                icon=ft.Icons.CHAT_BUBBLE_OUTLINE,
+            )
+            return
+
+        if self.mobile:
+            cards = []
+            for user in users:
+                dropdown = ft.Dropdown(
+                    label="เลือกผู้ยืม",
+                    options=list(borrower_options),
+                    value=str(user.borrower_id) if user.borrower_id is not None else None,
+                    expand=True,
+                    height=52,
+                    border_radius=CONTROL_RADIUS,
+                )
+                self._line_borrower_dropdowns[user.id] = dropdown
+                cards.append(
+                    build_data_card(
+                        title=user.display_name,
+                        icon=ft.Icons.CHAT_BUBBLE_OUTLINE,
+                        status=(
+                            "active",
+                            "ผูกผู้ยืมแล้ว" if user.borrower_id is not None else "ยังไม่ผูกผู้ยืม",
+                        ),
+                        fields=[
+                            ("อีเมล", user.email or "ไม่มีอีเมล"),
+                        ],
+                        full_width_fields=["อีเมล"],
+                        actions=[
+                            ft.Button(
+                                "บันทึกการผูก",
+                                icon=ft.Icons.LINK,
+                                expand=True,
+                                on_click=lambda e, user_id=user.id: self._link_line_user(user_id),
+                            ),
+                        ],
+                    )
+                )
+                cards.append(dropdown)
+            self.line_container.content = build_card_list(cards)
+            return
+
+        table = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("ชื่อ"), expand=3),
+                ft.DataColumn(ft.Text("อีเมล"), expand=3),
+                ft.DataColumn(ft.Text("สถานะ"), expand=2),
+                ft.DataColumn(ft.Text("เลือกผู้ยืม"), expand=3),
+                ft.DataColumn(ft.Text("จัดการ"), expand=2),
+            ],
+            rows=[
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(
+                            ft.Text(user.display_name, weight=ft.FontWeight.W_600)
+                        ),
+                        ft.DataCell(ft.Text(user.email or "ไม่มีอีเมล")),
+                        ft.DataCell(
+                            ft.Text(
+                                "ผูกผู้ยืมแล้ว" if user.borrower_id is not None else "ยังไม่ผูก"
+                            )
+                        ),
+                        ft.DataCell(dropdown),
+                        ft.DataCell(
+                            ft.Button(
+                                "ผูก",
+                                icon=ft.Icons.LINK,
+                                on_click=lambda e, user_id=user.id: self._link_line_user(user_id),
+                            )
+                        ),
+                    ]
+                )
+                for user in users
+                for dropdown in [self._make_line_dropdown(user)]
+            ],
+            column_spacing=24,
+            horizontal_lines=ft.BorderSide(1, ft.Colors.GREY_200),
+        )
+        self.line_container.content = build_table_surface(
+            table,
+            table_width=1150,
+            initial_width=(
+                self._surface_width
+                if self._surface_width is not None
+                else self._table_width
+            ),
+            on_resized=self._record_surface_width,
+        )
+
+    def _make_line_dropdown(self, user: AppUser) -> ft.Dropdown:
+        borrowers = self.service.list_borrowers(include_inactive=True)
+        dropdown = ft.Dropdown(
+            label="เลือกผู้ยืม",
+            options=[
+                ft.dropdown.Option(
+                    str(item.id), f"{item.borrower_code} — {item.full_name}"
+                )
+                for item in borrowers
+            ],
+            value=str(user.borrower_id) if user.borrower_id is not None else None,
+            expand=True,
+            height=52,
+            border_radius=CONTROL_RADIUS,
+        )
+        self._line_borrower_dropdowns[user.id] = dropdown
+        return dropdown
+
+    def _link_line_user(self, user_id: int) -> None:
+        if self.auth_service is None:
+            return
+        if not has_permission(self.current_user, Permission.MANAGE_PEOPLE):
+            self.feedback.value = "คุณไม่มีสิทธิ์ทำรายการนี้"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+        dropdown = self._line_borrower_dropdowns.get(user_id)
+        borrower_id = dropdown.value if dropdown is not None else None
+        if borrower_id:
+            try:
+                borrower_id = int(borrower_id)
+            except (TypeError, ValueError):
+                pass
+        else:
+            borrower_id = None
+        if borrower_id is None:
+            self.feedback.value = "กรุณาเลือกผู้ยืมก่อนผูก"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+        try:
+            updated = self.auth_service.set_user_borrower(
+                user_id, borrower_id, actor=self.current_user
+            )
+        except Exception:
+            self.feedback.value = "ผูกผู้ยืมไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
+            self.feedback.color = ft.Colors.RED_700
+            update_control(self)
+            return
+        self.feedback.value = f"ผูก {updated.display_name} กับผู้ยืมเรียบร้อย"
+        self.feedback.color = ft.Colors.GREEN_700
+        self._render_line_users()
+        update_control(self)
+
+    def _handle_line_search(self, e: ft.ControlEvent) -> None:
+        self._render_line_users()
+
+    def _handle_line_reset(self, e: ft.ControlEvent) -> None:
+        self.line_search.value = ""
+        self._render_line_users()

@@ -183,7 +183,7 @@ def test_register_line_user_creates_once_and_duplicate_raises(service) -> None:
     created = service.register_line_user(command)
 
     assert created.role is Role.USER
-    assert created.borrower_id is not None
+    assert created.borrower_id is None
     assert service.find_by_line_sub("line-sub-1").id == created.id
     assert service.get(created.id).id == created.id
 
@@ -223,3 +223,33 @@ def test_set_user_role_unknown_user(service) -> None:
 
     with pytest.raises(NotFoundError):
         service.set_user_role(999, Role.ADMIN, actor=admin)
+
+
+def test_set_user_borrower_links_line_user(service) -> None:
+    admin = _admin(service)
+    line_user = service.register_line_user(
+        RegisterLineUser(line_sub="line-sub-link", display_name="ผู้ใช้ไลน์ผูก")
+    )
+    assert line_user.borrower_id is None
+
+    updated = service.set_user_borrower(line_user.id, 3, actor=admin)
+
+    assert updated.borrower_id == 3
+    assert service.get(line_user.id).borrower_id == 3
+
+
+def test_set_user_borrower_requires_manage_people(service) -> None:
+    borrower = _borrower(service)
+    line_user = service.register_line_user(
+        RegisterLineUser(line_sub="line-sub-no-perm", display_name="ผู้ใช้ไลน์")
+    )
+
+    with pytest.raises(PermissionDenied):
+        service.set_user_borrower(line_user.id, 3, actor=borrower)
+
+
+def test_set_user_borrower_unknown_user(service) -> None:
+    admin = _admin(service)
+
+    with pytest.raises(NotFoundError):
+        service.set_user_borrower(999, 3, actor=admin)

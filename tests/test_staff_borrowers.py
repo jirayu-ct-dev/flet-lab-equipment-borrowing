@@ -1,6 +1,7 @@
 import flet as ft
 
-from app.services.fake_services import FakeInventoryService
+from app.contracts import RegisterLineUser
+from app.services.fake_services import FakeAuthService, FakeInventoryService
 from app.views.staff_borrowers import StaffBorrowersView
 from tests.test_auth_fixtures import admin_user
 
@@ -148,3 +149,55 @@ def test_people_search_toolbars_keep_search_reset_and_add_together() -> None:
     borrower_actions = borrower_toolbar.controls[1].content.controls
     assert borrower_actions[0].content == "เพิ่มผู้ยืม"
     assert borrower_actions[1].content == "รีเฟรช"
+
+
+def _line_auth() -> FakeAuthService:
+    auth = FakeAuthService()
+    auth.register_line_user(
+        RegisterLineUser(line_sub="u-line-1", display_name="ผู้ใช้ไลน์คนแรก")
+    )
+    return auth
+
+
+def test_line_tab_renders_line_users_table() -> None:
+    auth = _line_auth()
+    view = StaffBorrowersView(
+        FakeInventoryService(), current_user=admin_user(), auth_service=auth
+    )
+
+    view._switch_to_line(None)
+
+    line_table = view.line_container.content.content.controls[0]
+    assert isinstance(line_table, ft.DataTable)
+    assert line_table.rows[0].cells[0].content.value == "ผู้ใช้ไลน์คนแรก"
+
+
+def test_line_tab_links_user_to_borrower() -> None:
+    auth = _line_auth()
+    service = FakeInventoryService()
+    view = StaffBorrowersView(service, current_user=admin_user(), auth_service=auth)
+    view._switch_to_line(None)
+
+    line_user = next(user for user in auth.list_users() if user.line_sub == "u-line-1")
+    borrower = service.list_borrowers(include_inactive=True)[0]
+    view._line_borrower_dropdowns[line_user.id].value = str(borrower.id)
+
+    view._link_line_user(line_user.id)
+
+    assert auth.get(line_user.id).borrower_id == borrower.id
+    assert "เรียบร้อย" in view.feedback.value
+
+
+def test_line_tab_requires_selected_borrower() -> None:
+    auth = _line_auth()
+    view = StaffBorrowersView(
+        FakeInventoryService(), current_user=admin_user(), auth_service=auth
+    )
+    view._switch_to_line(None)
+
+    line_user = next(user for user in auth.list_users() if user.line_sub == "u-line-1")
+    view._line_borrower_dropdowns[line_user.id].value = None
+
+    view._link_line_user(line_user.id)
+
+    assert "เลือกผู้ยืม" in view.feedback.value

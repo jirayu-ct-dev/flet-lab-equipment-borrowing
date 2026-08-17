@@ -47,6 +47,7 @@ def _app_user(row: dict) -> AppUser:
         status=RecordStatus(row["status"]),
         must_change_password=bool(row["must_change_password"]),
         last_login_at=_timestamp(row["last_login_at"]),
+        line_sub=row.get("line_sub"),
     )
 
 
@@ -119,6 +120,23 @@ class SQLiteAuthAdapter:
         if auth_repository.get_user(self.database_path, user_id) is None:
             raise NotFoundError("user", user_id)
         auth_repository.update_role(self.database_path, user_id, new_role.value)
+        return self._get_required(user_id)
+
+    def set_user_borrower(
+        self, user_id: int, borrower_id: int | None, *, actor: AppUser
+    ) -> AppUser:
+        check_manage_users(actor)
+        if auth_repository.get_user(self.database_path, user_id) is None:
+            raise NotFoundError("user", user_id)
+        if borrower_id is not None:
+            borrower = auth_repository.find_borrower_by_id(
+                self.database_path, borrower_id
+            )
+            if borrower is None:
+                raise NotFoundError("borrower", borrower_id)
+        auth_repository.update_user_borrower(
+            self.database_path, user_id, borrower_id
+        )
         return self._get_required(user_id)
 
     def change_password(self, user_id: int, command: ChangePasswordCommand) -> None:

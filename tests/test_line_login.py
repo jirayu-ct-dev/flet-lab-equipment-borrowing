@@ -57,7 +57,7 @@ def test_register_or_fetch_user_creates_once_and_reuses() -> None:
     created = register_or_fetch_user(auth, "line-sub-1", "ผู้ใช้ไลน์")
 
     assert created.role is Role.USER
-    assert created.borrower_id is not None
+    assert created.borrower_id is None
     assert auth.find_by_line_sub("line-sub-1").id == created.id
 
     again = register_or_fetch_user(auth, "line-sub-1", "ชื่อใหม่")

@@ -126,7 +126,6 @@ class ReportLostView(ft.Container):
         if (
             not has_permission(self.current_user, Permission.VIEW_MY_LOANS)
             or self.current_user is None
-            or self.current_user.borrower_id is None
         ):
             self.content = build_state_view(
                 "ไม่มีสิทธิ์ใช้งานหน้านี้",

@@ -66,7 +66,7 @@ def test_borrower_can_navigate_permitted_tiles() -> None:
     assert shell._nav_feedback.value == ""
 
 
-def test_my_loans_guard_blocks_user_without_linked_borrower() -> None:
+def test_my_loans_allows_user_without_linked_borrower() -> None:
     unlinked_user = AppUser(
         id=3,
         role=Role.USER,
@@ -80,14 +80,13 @@ def test_my_loans_guard_blocks_user_without_linked_borrower() -> None:
     )
     shell = build_app_shell(current_user=unlinked_user)
     content_area = _shell_content_area(shell)
-    before = content_area.content
+    navigation_menu = _shell_menu(shell)
 
-    shell.navigate_to(
-        {"label": "ของฉัน", "route": "my_loans", "permission": Permission.VIEW_MY_LOANS}
-    )
+    my_loans_tile = navigation_menu.controls[1]
+    my_loans_tile.on_click(None)
 
-    assert shell._nav_feedback.value == "ไม่พบข้อมูลผู้ยืมที่เชื่อมโยงกับบัญชีนี้"
-    assert content_area.content is before
+    assert shell._nav_feedback.value == ""
+    assert isinstance(content_area.content.content, MyLoansView)
 
 
 def test_navigate_to_guard_blocks_forbidden_route_for_borrower() -> None:

@@ -645,6 +645,7 @@ class AppUser:
     status: RecordStatus
     must_change_password: bool
     last_login_at: datetime | None
+    line_sub: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -693,6 +694,10 @@ class AuthService(Protocol):
     def set_user_status(self, user_id: int, status: RecordStatus, *, actor: AppUser) -> None: ...
 
     def set_user_role(self, user_id: int, new_role: Role, *, actor: AppUser) -> AppUser: ...
+
+    def set_user_borrower(
+        self, user_id: int, borrower_id: int | None, *, actor: AppUser
+    ) -> AppUser: ...
 
     def change_password(self, user_id: int, command: ChangePasswordCommand) -> None: ...
 

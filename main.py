@@ -3,6 +3,8 @@ import os
 
 import flet as ft
 
+from flet.controls.services.url_launcher import UrlLauncher
+
 from app.components.common import update_control
 from app.contracts import AppUser, Permission, Role, has_permission
 from app.env import load_env_file
@@ -48,6 +50,12 @@ def get_service(services=None):
             return service
 
     return FakeInventoryService()
+
+
+def get_auth_service(services=None):
+    if services is not None:
+        return getattr(services, "auth_service", None)
+    return None
 
 
 def get_navigation_items():
@@ -149,7 +157,12 @@ def build_app_shell(
             return MyLoansView(service, current_user=current_user, mobile=mobile)
 
         if route == "people":
-            return StaffBorrowersView(service, mobile=mobile, current_user=current_user)
+            return StaffBorrowersView(
+                service,
+                mobile=mobile,
+                current_user=current_user,
+                auth_service=get_auth_service(services),
+            )
 
         if route == "borrow":
             return BorrowFlowView(service, current_user=current_user, notifier=notifier)
@@ -260,15 +273,6 @@ def build_app_shell(
 
         if current_user is not None and not has_permission(current_user, item["permission"]):
             _nav_feedback.value = "คุณไม่มีสิทธิ์เข้าถึงหน้านี้"
-            update_control(_nav_feedback)
-            return
-
-        if (
-            item.get("route") == "my_loans"
-            and current_user is not None
-            and current_user.borrower_id is None
-        ):
-            _nav_feedback.value = "ไม่พบข้อมูลผู้ยืมที่เชื่อมโยงกับบัญชีนี้"
             update_control(_nav_feedback)
             return
 
@@ -545,8 +549,17 @@ def main(
         if provider is None:
             _set_login_feedback("ยังไม่ได้ตั้งค่า LINE Login (ตรวจสอบการตั้งค่าระบบ)")
             return
+
+        async def _open_auth_url(url: str) -> None:
+            await UrlLauncher().launch_url(url, web_only_window_name="_self")
+
         page.on_login = on_line_authorized
-        page.run_task(page.login, provider)
+        page.run_task(
+            page.login,
+            provider,
+            redirect_to_page=True,
+            on_open_authorization_url=_open_auth_url,
+        )
 
     def show_login() -> None:
         nonlocal login_view

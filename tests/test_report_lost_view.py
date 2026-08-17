@@ -97,12 +97,13 @@ def test_report_lost_renders_permission_state_for_no_user() -> None:
     assert "กรุณาติดต่อเจ้าหน้าที่สาขา" in view.content.content.controls[2].value
 
 
-def test_report_lost_renders_permission_state_without_borrower_id() -> None:
+def test_report_lost_renders_empty_state_without_borrower_id() -> None:
     view = ReportLostView(
         FakeInventoryService(), current_user=_user_without_borrower()
     )
 
-    assert "ไม่มีสิทธิ์ใช้งานหน้านี้" in view.content.content.controls[1].value
+    state = view.borrowed_container.content
+    assert "ไม่มีอุปกรณ์ที่ยืมอยู่" in state.content.controls[1].value
 
 
 def test_report_lost_desktop_table_lists_borrowed_units() -> None:

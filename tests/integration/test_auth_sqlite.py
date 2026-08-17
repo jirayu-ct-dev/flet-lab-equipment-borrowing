@@ -296,3 +296,44 @@ def test_set_user_role_unknown_user(auth) -> None:
 
     with pytest.raises(NotFoundError):
         auth.set_user_role(999, Role.ADMIN, actor=admin)
+
+
+def test_set_user_borrower_links_line_user(auth) -> None:
+    admin = _admin(auth)
+    line_user = auth.register_line_user(
+        RegisterLineUser(line_sub="line-sub-link", display_name="ผู้ใช้ไลน์ผูก")
+    )
+    assert line_user.borrower_id is None
+
+    with connect(auth.database_path) as database:
+        database.execute(
+            "INSERT INTO borrowers(borrower_code, full_name) VALUES ('BR-LINK', 'ผู้ยืมปลายทาง')"
+        )
+        database.commit()
+        borrower_id = database.execute(
+            "SELECT id FROM borrowers WHERE borrower_code = 'BR-LINK'"
+        ).fetchone()["id"]
+
+    updated = auth.set_user_borrower(line_user.id, borrower_id, actor=admin)
+
+    assert updated.borrower_id == borrower_id
+    assert auth.get(line_user.id).borrower_id == borrower_id
+
+
+def test_set_user_borrower_requires_manage_people(auth) -> None:
+    borrower = _borrower(auth)
+    line_user = auth.register_line_user(
+        RegisterLineUser(line_sub="line-sub-no-perm", display_name="ผู้ใช้ไลน์")
+    )
+
+    with pytest.raises(PermissionDenied):
+        auth.set_user_borrower(line_user.id, 1, actor=borrower)
+
+
+def test_set_user_borrower_unknown_user_or_borrower(auth) -> None:
+    admin = _admin(auth)
+
+    with pytest.raises(NotFoundError):
+        auth.set_user_borrower(999, 1, actor=admin)
+    with pytest.raises(NotFoundError):
+        auth.set_user_borrower(1, 999, actor=admin)

@@ -938,6 +938,20 @@ class FakeAuthService:
         ]
         return self.get(user_id)  # type: ignore[return-value]
 
+    def set_user_borrower(
+        self, user_id: int, borrower_id: int | None, *, actor: AppUser
+    ) -> AppUser:
+        check_manage_users(actor)
+        if self.get(user_id) is None:
+            raise NotFoundError("user", user_id)
+        self._users = [
+            replace(candidate, borrower_id=borrower_id)
+            if candidate.id == user_id
+            else candidate
+            for candidate in self._users
+        ]
+        return self.get(user_id)  # type: ignore[return-value]
+
     def change_password(self, user_id: int, command: ChangePasswordCommand) -> None:
         user = self.get(user_id)
         if user is None:
@@ -975,10 +989,11 @@ class FakeAuthService:
             display_name=command.display_name.strip(),
             email=command.email,
             staff_id=None,
-            borrower_id=self._next_id + 100,
+            borrower_id=None,
             status=RecordStatus.ACTIVE,
             must_change_password=False,
             last_login_at=None,
+            line_sub=command.line_sub,
         )
         self._users.append(user)
         self._line_subs[user.id] = command.line_sub

@@ -158,6 +158,20 @@ def update_role(database_path: DatabasePath, user_id: int, role: str) -> None:
     )
 
 
+def update_user_borrower(
+    database_path: DatabasePath, user_id: int, borrower_id: int | None
+) -> None:
+    _write(
+        database_path,
+        """
+        UPDATE app_users
+        SET borrower_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?
+        """,
+        (borrower_id, user_id),
+    )
+
+
 def update_last_login(database_path: DatabasePath, user_id: int, now: datetime) -> None:
     _write(
         database_path,
@@ -180,6 +194,20 @@ def find_borrower_by_code(database_path: DatabasePath, borrower_code: str) -> di
             WHERE borrower_code = ?
             """,
             (borrower_code,),
+        ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def find_borrower_by_id(database_path: DatabasePath, borrower_id: int) -> dict | None:
+    with connection(database_path) as database:
+        row = database.execute(
+            """
+            SELECT id, borrower_code, full_name, department, email, phone, note,
+                   status, created_at, updated_at
+            FROM borrowers
+            WHERE id = ?
+            """,
+            (borrower_id,),
         ).fetchone()
     return dict(row) if row is not None else None
 
