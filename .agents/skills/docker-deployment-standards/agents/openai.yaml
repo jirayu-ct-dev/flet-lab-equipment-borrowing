@@ -1,0 +1,4 @@
+interface:
+  display_name: "Docker Deployment Standards"
+  short_description: "Build reliable Docker and Compose deployments"
+  default_prompt: "Use $docker-deployment-standards to containerize this application and verify its startup path."

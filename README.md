@@ -26,6 +26,11 @@ Mini project สำหรับจัดการอุปกรณ์ได้�
 
 ## วิธีรันบนเครื่อง
 
+```text
+บัญชี demo:
+- ผู้ดูแลระบบ: admin@lab.local / admin123
+- ผู้ยืม: borrower@lab.local / borrow123
+```
 ### macOS และ Linux
 
 สร้าง virtual environment และติดตั้ง dependencies:

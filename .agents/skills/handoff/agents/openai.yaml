@@ -1,0 +1,7 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Prepare a compact handoff for another agent"
+  default_prompt: "Use $handoff to prepare context for my next session."
+
+policy:
+  allow_implicit_invocation: false

@@ -75,15 +75,31 @@ docker compose up --build -d                    # → http://localhost:8080
 
 ---
 
+General operating principles for coding agents. Apply them across projects, then adapt to this repository's instructions, conventions, and tooling.
+
+**Balance:** Favor correctness and restraint without turning low-risk work into ceremony. For small, reversible tasks, inspect briefly and proceed. For ambiguous, high-impact, or destructive work, slow down and confirm the important assumptions.
+
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## Scope and authority
+
+**The request defines the goal; it does not authorize unrelated work.**
+
+- For explanation, review, or diagnosis, inspect and report. Do not modify unless asked.
+- For implementation or fixes, make the necessary in-scope changes and verify them.
+- Ask before material destructive operations that were not explicitly requested, adding major dependencies, changing public contracts, or expanding scope materially.
+- Follow explicit repository requirements and the most specific applicable project instructions; surface conflicts instead of silently choosing.
 
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
 
 Before implementing:
+- Read relevant code, nearby documentation, and applicable `AGENTS.md` files.
+- Identify the requested outcome, current behavior, and constraints; check project conventions and available commands instead of guessing.
+- Consider whether a smaller solution already exists in the repository.
 - State your assumptions explicitly. If uncertain, ask.
 - If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
@@ -117,6 +133,13 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
+## Adapt to the project
+
+- Use repository documentation and package scripts to discover build, test, lint, and formatting commands.
+- Put language-, framework-, or domain-specific workflows in the relevant local instructions or skills, not in this general guidance.
+- Prefer formatters, linters, type checkers, tests, and CI for rules that can be checked mechanically.
+- Do not replace an established project pattern merely because another pattern is generally preferred.
+
 ## 4. Goal-Driven Execution
 
 **Define success criteria. Loop until verified.**
@@ -134,6 +157,10 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+During implementation, reproduce bugs before fixing them when practical, add or update tests when behavior changes and the project has a suitable test structure, run the narrowest relevant checks first, and review the final diff for accidental scope expansion.
+
+At handoff, state what changed, what was verified, and any remaining uncertainty. Never claim a check passed if it was not run.
 
 ---
 
