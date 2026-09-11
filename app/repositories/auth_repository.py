@@ -172,6 +172,20 @@ def update_user_borrower(
     )
 
 
+def update_user_staff(
+    database_path: DatabasePath, user_id: int, staff_id: int | None
+) -> None:
+    _write(
+        database_path,
+        """
+        UPDATE app_users
+        SET staff_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?
+        """,
+        (staff_id, user_id),
+    )
+
+
 def update_last_login(database_path: DatabasePath, user_id: int, now: datetime) -> None:
     _write(
         database_path,

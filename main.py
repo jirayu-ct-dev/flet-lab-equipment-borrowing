@@ -34,8 +34,8 @@ from app.views.history import build_history_view
 from app.views.inventory import build_inventory_view
 from app.views.loans import LoansView
 from app.views.my_loans import MyLoansView
+from app.views.people import PeopleDirectoryView
 from app.views.report_lost import ReportLostView
-from app.views.staff_borrowers import StaffBorrowersView
 
 
 def get_service(services=None):
@@ -157,7 +157,7 @@ def build_app_shell(
             return MyLoansView(service, current_user=current_user, mobile=mobile)
 
         if route == "people":
-            return StaffBorrowersView(
+            return PeopleDirectoryView(
                 service,
                 mobile=mobile,
                 current_user=current_user,

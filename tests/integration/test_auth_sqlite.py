@@ -320,6 +320,23 @@ def test_set_user_borrower_links_line_user(auth) -> None:
     assert auth.get(line_user.id).borrower_id == borrower_id
 
 
+def test_set_user_staff_links_account(auth) -> None:
+    admin = _admin(auth)
+    with connect(auth.database_path) as database:
+        database.execute(
+            "INSERT INTO staff(staff_code, full_name) VALUES ('ST-LINK', 'เจ้าหน้าที่ปลายทาง')"
+        )
+        database.commit()
+        staff_id = database.execute(
+            "SELECT id FROM staff WHERE staff_code = 'ST-LINK'"
+        ).fetchone()["id"]
+
+    updated = auth.set_user_staff(2, staff_id, actor=admin)
+
+    assert updated.staff_id == staff_id
+    assert auth.get(2).staff_id == staff_id
+
+
 def test_set_user_borrower_requires_manage_people(auth) -> None:
     borrower = _borrower(auth)
     line_user = auth.register_line_user(

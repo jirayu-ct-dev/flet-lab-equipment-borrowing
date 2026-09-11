@@ -2,7 +2,7 @@ import flet as ft
 
 from main import APP_TITLE, apply_shell_width, build_app_shell, build_home, get_navigation_items
 from app.components.common import build_state_view
-from app.views.staff_borrowers import StaffBorrowersView
+from app.views.people import PeopleDirectoryView
 
 
 def test_build_home_returns_safe_area() -> None:
@@ -56,7 +56,7 @@ def test_build_app_shell_switches_content_on_navigation_change() -> None:
 
     navigation_menu.controls[3].on_click(None)
 
-    assert isinstance(content_area.content.content, StaffBorrowersView)
+    assert isinstance(content_area.content.content, PeopleDirectoryView)
     assert navigation_menu.controls[3].selected is True
     assert navigation_menu.controls[0].selected is False
 

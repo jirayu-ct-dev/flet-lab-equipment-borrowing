@@ -13,14 +13,15 @@ from app.contracts import (
     RegisterLineUser,
     Role,
 )
-from app.database import initialize_database, utc_now
+from app.database import connection, initialize_database, utc_now
 from app.errors import (
     AuthenticationError,
     DuplicateCodeError,
     NotFoundError,
+    ValidationError,
 )
 from app.repositories import auth_repository
-from app.security import hash_password
+from app.security import hash_password, validate_password_strength
 from app.services.auth_service import (
     INACTIVE_USER_MESSAGE,
     WRONG_CREDENTIALS_MESSAGE,
@@ -139,6 +140,24 @@ class SQLiteAuthAdapter:
         )
         return self._get_required(user_id)
 
+    def set_user_staff(
+        self, user_id: int, staff_id: int | None, *, actor: AppUser
+    ) -> AppUser:
+        check_manage_users(actor)
+        if auth_repository.get_user(self.database_path, user_id) is None:
+            raise NotFoundError("user", user_id)
+        if staff_id is not None:
+            with connection(self.database_path) as database:
+                staff = database.execute("SELECT id FROM staff WHERE id = ?", (staff_id,)).fetchone()
+            if staff is None:
+                raise NotFoundError("staff", staff_id)
+        try:
+            auth_repository.update_user_staff(self.database_path, user_id, staff_id)
+        except sqlite3.IntegrityError as error:
+            self._translate_duplicate(error, staff_id=str(staff_id) if staff_id is not None else None)
+            raise
+        return self._get_required(user_id)
+
     def change_password(self, user_id: int, command: ChangePasswordCommand) -> None:
         row = auth_repository.get_user(self.database_path, user_id)
         if row is None:
@@ -154,6 +173,9 @@ class SQLiteAuthAdapter:
         check_manage_users(actor)
         if auth_repository.get_user(self.database_path, user_id) is None:
             raise NotFoundError("user", user_id)
+        error = validate_password_strength(new_password)
+        if error is not None:
+            raise ValidationError(error, field="new_password")
         auth_repository.update_password(
             self.database_path,
             user_id,

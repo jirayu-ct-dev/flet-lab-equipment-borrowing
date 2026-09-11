@@ -25,7 +25,7 @@ from app.errors import (
     ReportAlreadyReviewed,
     ValidationError,
 )
-from app.security import hash_password
+from app.security import hash_password, validate_password_strength
 from app.services.auth_service import (
     INACTIVE_USER_MESSAGE,
     WRONG_CREDENTIALS_MESSAGE,
@@ -944,8 +944,32 @@ class FakeAuthService:
         check_manage_users(actor)
         if self.get(user_id) is None:
             raise NotFoundError("user", user_id)
+        if borrower_id is not None and any(
+            candidate.id != user_id and candidate.borrower_id == borrower_id
+            for candidate in self._users
+        ):
+            raise DuplicateCodeError("borrower_id", str(borrower_id))
         self._users = [
             replace(candidate, borrower_id=borrower_id)
+            if candidate.id == user_id
+            else candidate
+            for candidate in self._users
+        ]
+        return self.get(user_id)  # type: ignore[return-value]
+
+    def set_user_staff(
+        self, user_id: int, staff_id: int | None, *, actor: AppUser
+    ) -> AppUser:
+        check_manage_users(actor)
+        if self.get(user_id) is None:
+            raise NotFoundError("user", user_id)
+        if staff_id is not None and any(
+            candidate.id != user_id and candidate.staff_id == staff_id
+            for candidate in self._users
+        ):
+            raise DuplicateCodeError("staff_id", str(staff_id))
+        self._users = [
+            replace(candidate, staff_id=staff_id)
             if candidate.id == user_id
             else candidate
             for candidate in self._users
@@ -971,6 +995,9 @@ class FakeAuthService:
         check_manage_users(actor)
         if self.get(user_id) is None:
             raise NotFoundError("user", user_id)
+        error = validate_password_strength(new_password)
+        if error is not None:
+            raise ValidationError(error, field="new_password")
         self._passwords[user_id] = hash_password(new_password)
         self._users = [
             replace(candidate, must_change_password=True)
