@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 import flet as ft
@@ -22,20 +23,24 @@ from app.theme import (
     COLOR_SIDEBAR_ACTIVE,
     COLOR_SIDEBAR_TEXT,
     MOBILE_BREAKPOINT,
-    find_nav_item,
-    visible_navigation_items,
 )
 
-from app.views.borrow_flow import BorrowFlowView
 from app.views.contact import ContactView
 from app.views.dashboard import DashboardView
 from app.views.guide import build_guide_view
-from app.views.history import build_history_view
-from app.views.inventory import build_inventory_view
-from app.views.loans import LoansView
-from app.views.my_loans import MyLoansView
 from app.views.people import PeopleDirectoryView
 from app.views.report_lost import ReportLostView
+from app.views.rebuild import (
+    HistoryWorkspaceView,
+    InventoryWorkspaceView,
+    MyLoansWorkspaceView,
+    QuickBorrowView,
+    QuickReturnView,
+    WorkspaceView,
+)
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def get_service(services=None):
@@ -68,6 +73,25 @@ def get_navigation_items():
         {"label": "คืนอุปกรณ์", "icon": ft.Icons.RECEIPT_LONG_OUTLINED},
         {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED},
         {"label": "แจ้งหาย", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED},
+    ]
+
+
+def get_workspace_navigation_items():
+    """Task-first navigation used by the rebuilt application shell.
+
+    ``get_navigation_items`` remains as a small compatibility API for callers
+    that imported the original menu definition.  The running app uses this
+    shorter, work-oriented wording instead.
+    """
+    return [
+        {"label": "งานวันนี้", "icon": ft.Icons.DASHBOARD_OUTLINED, "selected_icon": ft.Icons.DASHBOARD, "route": "dashboard", "permission": Permission.VIEW_DASHBOARD},
+        {"label": "อุปกรณ์", "icon": ft.Icons.INVENTORY_2_OUTLINED, "selected_icon": ft.Icons.INVENTORY_2, "route": "inventory", "permission": Permission.VIEW_INVENTORY},
+        {"label": "ยืมอุปกรณ์", "icon": ft.Icons.ASSIGNMENT_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT, "route": "borrow", "permission": Permission.MANAGE_LOANS},
+        {"label": "คนในระบบ", "icon": ft.Icons.PEOPLE_OUTLINED, "selected_icon": ft.Icons.PEOPLE, "route": "people", "permission": Permission.MANAGE_PEOPLE},
+        {"label": "รับคืน", "icon": ft.Icons.RECEIPT_LONG_OUTLINED, "selected_icon": ft.Icons.RECEIPT_LONG, "route": "returns", "permission": Permission.MANAGE_LOANS},
+        {"label": "ของฉัน", "icon": ft.Icons.ASSIGNMENT_IND_OUTLINED, "selected_icon": ft.Icons.ASSIGNMENT_IND, "route": "my_loans", "permission": Permission.VIEW_MY_LOANS},
+        {"label": "ประวัติ", "icon": ft.Icons.HISTORY_OUTLINED, "selected_icon": ft.Icons.HISTORY, "route": "history", "permission": Permission.VIEW_HISTORY},
+        {"label": "แจ้งหาย", "icon": ft.Icons.REPORT_PROBLEM_OUTLINED, "selected_icon": ft.Icons.REPORT_PROBLEM, "route": "report_lost", "permission": Permission.VIEW_MY_LOANS},
     ]
 
 
@@ -140,7 +164,16 @@ def build_app_shell(
     service = get_service(services)
     mobile = width is not None and width <= MOBILE_BREAKPOINT
 
-    visible = visible_navigation_items(current_user)
+    workspace_items = get_workspace_navigation_items()
+    visible = (
+        workspace_items
+        if current_user is None
+        else [
+            item
+            for item in workspace_items
+            if has_permission(current_user, item["permission"])
+        ]
+    )
 
     logout_callback = (lambda e: on_logout()) if on_logout is not None else None
 
@@ -148,13 +181,26 @@ def build_app_shell(
         route = item.get("route", "dashboard")
 
         if route == "dashboard":
-            return DashboardView(service, mobile=mobile, current_user=current_user)
+            return WorkspaceView(
+                service,
+                mobile=mobile,
+                current_user=current_user,
+                on_navigate=lambda target: navigate_to_route(target),
+            )
 
         if route == "inventory":
-            return build_inventory_view(service, mobile=mobile)
+            return InventoryWorkspaceView(
+                service,
+                mobile=mobile,
+                current_user=current_user,
+            )
 
         if route == "my_loans":
-            return MyLoansView(service, current_user=current_user, mobile=mobile)
+            return MyLoansWorkspaceView(
+                service,
+                current_user=current_user,
+                mobile=mobile,
+            )
 
         if route == "people":
             return PeopleDirectoryView(
@@ -165,13 +211,23 @@ def build_app_shell(
             )
 
         if route == "borrow":
-            return BorrowFlowView(service, current_user=current_user, notifier=notifier)
+            return QuickBorrowView(
+                service,
+                current_user=current_user,
+                notifier=notifier,
+                mobile=mobile,
+            )
 
         if route == "returns":
-            return LoansView(service, mobile=mobile, current_user=current_user, notifier=notifier)
+            return QuickReturnView(
+                service,
+                mobile=mobile,
+                current_user=current_user,
+                notifier=notifier,
+            )
 
         if route == "history":
-            return build_history_view(service, mobile=mobile)
+            return HistoryWorkspaceView(service, mobile=mobile)
 
         if route == "report_lost":
             return ReportLostView(service, current_user=current_user, mobile=mobile)
@@ -183,6 +239,14 @@ def build_app_shell(
             return ContactView(service, mobile=mobile)
 
         return DashboardView(service, mobile=mobile, current_user=current_user)
+
+    def navigate_to_route(route: str) -> None:
+        target = next(
+            (candidate for candidate in visible if candidate.get("route") == route),
+            None,
+        )
+        if target is not None:
+            navigate_to(target)
 
     # ========================================================
     # CONTENT AREA
@@ -360,7 +424,12 @@ def build_app_shell(
         role_label = ""
     else:
         display_name = current_user.display_name
-        role_label = "ผู้ดูแลระบบ" if current_user.role == Role.ADMIN else "ผู้ใช้ทั่วไป"
+        if current_user.role == Role.ADMIN:
+            role_label = "ผู้ดูแลระบบ"
+        elif current_user.staff_id is not None:
+            role_label = "เจ้าหน้าที่"
+        else:
+            role_label = "ผู้ยืม"
 
     logout_block = ft.Row(
         controls=[
@@ -515,7 +584,14 @@ def main(
         required = ROUTE_PERMISSIONS.get(resolved)
         if required is not None and not has_permission(logged_in_user, required):
             return
-        item = find_nav_item(resolved)
+        item = next(
+            (
+                candidate
+                for candidate in get_workspace_navigation_items()
+                if candidate.get("route") == resolved
+            ),
+            None,
+        )
         if item is None:
             item = {"label": resolved, "route": resolved, "permission": None}
         shell.navigate_to(item)
@@ -528,7 +604,11 @@ def main(
 
     def on_line_authorized(data: ft.LoginEvent) -> None:
         if data.error:
-            _set_login_feedback("เข้าสู่ระบบด้วย LINE ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง")
+            detail = getattr(data, "error_description", None) or str(data.error)
+            LOGGER.warning("LINE Login callback failed: %s", detail)
+            _set_login_feedback(
+                "LINE เข้าสู่ระบบไม่สำเร็จ ตรวจสอบ Redirect URL และลองใหม่อีกครั้ง"
+            )
             return
         authorization = page.auth
         profile = (
@@ -540,7 +620,12 @@ def main(
             _set_login_feedback("ไม่สามารถดึงข้อมูลผู้ใช้ LINE ได้ กรุณาลองใหม่อีกครั้ง")
             return
         display_name = profile.get("displayName") or "ผู้ใช้ LINE"
-        user = register_or_fetch_user(auth, profile.id, display_name)
+        user = register_or_fetch_user(
+            auth,
+            profile.id,
+            display_name,
+            auto_create_borrower=True,
+        )
         sync_richmenu(profile.id, user)
         handle_login_success(user)
 

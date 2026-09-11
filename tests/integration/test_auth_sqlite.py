@@ -24,6 +24,7 @@ from app.errors import (
 from app.repositories import auth_repository
 from app.security import hash_password, new_session_token
 from app.services.sqlite_auth_adapter import SQLiteAuthAdapter
+from app.services.line_login import register_or_fetch_user
 
 
 def _iso(instant: datetime) -> str:
@@ -242,6 +243,22 @@ def test_register_line_user_without_borrower_code(auth) -> None:
 
     assert created.role is Role.USER
     assert created.borrower_id is None
+
+
+def test_line_login_wrapper_creates_a_borrower_profile_for_new_user(auth) -> None:
+    created = register_or_fetch_user(
+        auth,
+        "U4f8c-test-line-id",
+        "ผู้ใช้ใหม่จาก LINE",
+        auto_create_borrower=True,
+    )
+
+    assert created.borrower_id is not None
+    borrower = auth_repository.find_borrower_by_id(
+        auth.database_path, created.borrower_id
+    )
+    assert borrower["borrower_code"] == "LINE-TEST-LINE-ID"
+    assert borrower["full_name"] == "ผู้ใช้ใหม่จาก LINE"
 
 
 def test_sessions_lifecycle_and_expiry(auth) -> None:

@@ -626,11 +626,21 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     }),
 }
 
+OPERATIONAL_STAFF_PERMISSIONS = frozenset({
+    Permission.VIEW_DASHBOARD,
+    Permission.VIEW_INVENTORY,
+    Permission.VIEW_HISTORY,
+    Permission.VIEW_MY_LOANS,
+    Permission.MANAGE_LOANS,
+})
+
 
 def has_permission(user: "AppUser | None", permission: Permission) -> bool:
     """False for None (unauthenticated)."""
     if user is None:
         return False
+    if user.role is Role.USER and user.staff_id is not None:
+        return permission in OPERATIONAL_STAFF_PERMISSIONS
     return permission in ROLE_PERMISSIONS[user.role]
 
 

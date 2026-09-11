@@ -69,9 +69,9 @@ once to an existing database volume.
 
 ## Docker demo data
 
-`app.seed.seed_demo_data()` inserts 50 equipment units across computer,
+`app.seed.seed_demo_data()` inserts 58 equipment units across computer,
 scientific, audiovisual, workshop, office, activity, and safety categories. It
-also creates five borrowers, five loans, five return events, locations, staff,
+also creates six borrowers, five loans, five return events, locations, staff,
 inventory history, maintenance and lost-item examples. Set `APP_SEED_DEMO=0` to
 disable this behavior.
 

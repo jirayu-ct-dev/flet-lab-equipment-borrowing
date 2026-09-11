@@ -2,9 +2,9 @@
 
 ## Project: flet-lab-equipment-borrowing
 
-Flet (Python) web app for a lab-equipment borrowing system. SQLite backend, single
-user, no auth. **All UI copy is Thai** (labels, hints, toasts); domain code and
-status strings are English.
+Flet (Python) web app for a lab-equipment borrowing system. SQLite backend for a
+small team, with email/password and LINE Login. **All UI copy is Thai** (labels,
+hints, toasts); domain code and status strings are English.
 
 ### Commands
 
@@ -25,6 +25,12 @@ docker compose up --build -d                    # → http://localhost:8080
 
 - `main.py` builds the app shell and swaps `content_area.content` per nav tab; views in
   `app/views/`.
+- The running shell uses `app/views/rebuild.py`: `WorkspaceView` is the queue-first
+  home page, `QuickBorrowView` is the one-page multi-unit checkout flow, and
+  `QuickReturnView` is the return queue with outstanding items preselected. Keep
+  actions focused on the two verbs staff use most: ยืม and รับคืน. The older view
+  modules remain compatibility boundaries for tests and integrations; do not wire
+  them back into the shell without a deliberate UX reason.
 - Views consume one duck-typed service facade: `FakeInventoryService` (in-memory,
   `app/services/fake_services.py`) or `SQLiteInventoryAdapter` (persistent,
   `app/services/sqlite_adapter.py`), chosen by `create_app_services()`
@@ -47,11 +53,11 @@ docker compose up --build -d                    # → http://localhost:8080
 ### Authentication & authorization
 
 - Roles: `admin` (staff, full access) / `user` (borrower self-service: อุปกรณ์, ของฉัน,
-  ประวัติ). `Role`, `Permission`, `ROLE_PERMISSIONS`, `has_permission()` live in
-  `app/contracts.py`; both roles are enforced in TWO places: nav/route gating in
-  `main.py` (`visible_navigation_items` + `navigate_to` guard) and
-  `if not has_permission(...)` guards at the top of every mutation handler in views
-  (`borrow_flow`, `loans`, `staff_borrowers`, `dashboard`).
+  ประวัติ). A `user` account linked to `staff_id` is treated as an operational staff
+  account for dashboard, inventory viewing, history, and loan/return operations.
+  `Role`, `Permission`, `ROLE_PERMISSIONS`, `has_permission()` live in
+  `app/contracts.py`; permissions are enforced both by nav/route gating in
+  `main.py` and by guards at mutation handlers.
 - Identity: `app_users` (email + password_hash via `app/security.py` pbkdf2, and/or
   LINE via `line_sub`) linking to `staff_id` or `borrower_id`. `AuthService` protocol
   implemented by `FakeAuthService` and `SQLiteAuthAdapter` — keep them in sync like
@@ -60,6 +66,10 @@ docker compose up --build -d                    # → http://localhost:8080
   `must_change_password` routes to ChangePasswordView. LINE login uses flet's
   `page.login(OAuthProvider)` (`app/services/line_login.py`), enabled by env vars
   `LINE_CLIENT_ID` / `LINE_CLIENT_SECRET` / `LINE_REDIRECT_URL` — never commit secrets.
+- A first-time LINE login receives a generated borrower profile in SQLite so the
+  account is not left as an unusable orphan. Staff can edit or link that profile
+  later from คนในระบบ. LINE push notifications use
+  `LINE_MESSAGING_CHANNEL_ACCESS_TOKEN` and are always best-effort.
 - Demo accounts (seeded): `admin@lab.local`/`admin123` (must change on first login),
   `borrower@lab.local`/`borrow123`. Test fixtures: `tests/test_auth_fixtures.py`.
 
@@ -68,7 +78,7 @@ docker compose up --build -d                    # → http://localhost:8080
 - `tests/` = view + fake-service unit tests (build flet controls, assert structure; no
   server needed). `tests/integration/` = SQLite/migration/seed/service tests using
   `tmp_path` DBs — never touch the real `data/`.
-- `tests/integration/test_seed.py` asserts exact demo row counts (50 units, 5 loans, ...);
+- `tests/integration/test_seed.py` asserts exact demo row counts (58 units, 5 loans, ...);
   update it when seed data changes.
 - Status strings are English in the domain (`available`, `borrowed`, ...); Thai display
   labels live in `STATUS_THEMES` in `app/theme.py`.

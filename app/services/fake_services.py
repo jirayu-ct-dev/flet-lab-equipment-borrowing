@@ -1009,6 +1009,12 @@ class FakeAuthService:
     def register_line_user(self, command: RegisterLineUser) -> AppUser:
         if self.find_by_line_sub(command.line_sub) is not None:
             raise DuplicateCodeError("line_sub", command.line_sub)
+        borrower_id = None
+        if command.borrower_code:
+            # FakeAuthService deliberately has no shared master-data store.
+            # Keep the fake deterministic; the SQLite adapter creates the
+            # borrower record for the real application.
+            borrower_id = None
         self._next_id += 1
         user = AppUser(
             id=self._next_id,
@@ -1016,7 +1022,7 @@ class FakeAuthService:
             display_name=command.display_name.strip(),
             email=command.email,
             staff_id=None,
-            borrower_id=None,
+            borrower_id=borrower_id,
             status=RecordStatus.ACTIVE,
             must_change_password=False,
             last_login_at=None,
