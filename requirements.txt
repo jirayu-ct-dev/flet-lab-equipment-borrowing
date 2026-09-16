@@ -1,2 +1,2 @@
-flet[all]==0.86.1
+flet[all]==1.0.0
 openpyxl==3.1.5

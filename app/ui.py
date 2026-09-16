@@ -182,7 +182,11 @@ class AppUI:
         self.loan_due_date = (bangkok_today() + timedelta(days=7)).isoformat()
         self.pending_import: ImportPreview | None = None
         self.mobile = bool(self.page.width and self.page.width < 900)
-        self.file_picker = ft.FilePicker()
+        # FilePicker event handlers must be present when the service is mounted.
+        # Assigning on_result only when the dialog opens leaves the web client
+        # without a result subscription, so selecting a file appears to do
+        # nothing (notably in Safari).
+        self.file_picker = ft.FilePicker(on_result=self._handle_import_file_selected)
         self.preferences = ft.SharedPreferences()
         self.page.services.append(self.file_picker)
         self.page.services.append(self.preferences)
@@ -219,13 +223,16 @@ class AppUI:
         except Exception:
             pass
 
-    def dialog(self, heading: str, content: ft.Control, save_text: str, on_save, *, width: int = 620) -> None:
+    def dialog(self, heading: str, content: ft.Control, save_text: str, on_save=None, *, width: int = 620, action=None) -> None:
         self.page.show_dialog(
             ft.AlertDialog(
                 modal=True,
                 title=ft.Text(heading, size=20, weight=ft.FontWeight.BOLD),
                 content=ft.Container(content, width=width),
-                actions=[ft.TextButton("ยกเลิก", on_click=lambda _: self.close_dialog()), ft.Button(save_text, bgcolor=PRIMARY, color=ft.Colors.WHITE, on_click=on_save)],
+                actions=[
+                    ft.TextButton("ยกเลิก", on_click=lambda _: self.close_dialog()),
+                    ft.Button(save_text, bgcolor=PRIMARY, color=ft.Colors.WHITE, on_click=on_save, action=action),
+                ],
                 actions_alignment=ft.MainAxisAlignment.END,
                 shape=ft.RoundedRectangleBorder(radius=20),
                 scrollable=True,
@@ -471,14 +478,19 @@ class AppUI:
                         padding=ft.Padding.only(left=8, right=8, top=10, bottom=18),
                     ),
                     *[
-                        ft.Button(
+                        ft.TextButton(
                             label,
                             icon=icon,
-                            bgcolor="#eaf2ff" if route == nav_route else None,
-                            color=PRIMARY if route == nav_route else TEXT,
                             height=48,
                             width=float("inf"),
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), alignment=ft.Alignment.CENTER_LEFT),
+                            style=ft.ButtonStyle(
+                                bgcolor="#eaf2ff" if route == nav_route else ft.Colors.TRANSPARENT,
+                                color=PRIMARY if route == nav_route else TEXT,
+                                icon_color=PRIMARY if route == nav_route else TEXT,
+                                shape=ft.RoundedRectangleBorder(radius=10),
+                                alignment=ft.Alignment.CENTER_LEFT,
+                                overlay_color={ft.ControlState.HOVERED: "#f4f7fb"},
+                            ),
                             on_click=lambda _, target=route: self.go(target),
                         )
                         for route, label, icon in items
@@ -964,34 +976,58 @@ class AppUI:
         loans = self.service.user_history(user_id)
         self.dialog(f"ประวัติของ {name}", self.loan_cards(loans), "ปิด", lambda _: self.close_dialog())
 
-    def import_users_dialog(self) -> None:
-        async def download(extension: str):
-            await self.file_picker.save_file(file_name=f"user-import-template.{extension}", allowed_extensions=[extension], src_bytes=template_bytes(extension))
-
-        async def pick(_):
-            files = await self.file_picker.pick_files(file_type=ft.FilePickerFileType.CUSTOM, allowed_extensions=["csv", "xlsx"], with_data=True)
-            if not files:
+    def _handle_import_file_selected(self, event: ft.FilePickerResultEvent) -> None:
+        files = event.files
+        if not files:
+            return
+        selected_file = files[0]
+        try:
+            data = selected_file.bytes
+            if isinstance(data, (list, bytearray, memoryview)):
+                data = bytes(data)
+            if data is None and selected_file.path:
+                data = Path(selected_file.path).read_bytes()
+            if data is None:
+                self.feedback("ไม่สามารถอ่านไฟล์ที่เลือกได้", error=True)
                 return
-            selected = files[0]
-            data = selected.bytes
-            if data is None and selected.path:
-                data = Path(selected.path).read_bytes()
-            try:
-                self.pending_import = preview_users(self.service, selected.name, data or b"")
-                self.close_dialog()
-                self.import_preview_dialog()
-            except (AppError, UnicodeError, ValueError) as error:
-                self.feedback(str(error), error=True)
+            self.pending_import = preview_users(self.service, selected_file.name, data)
+            self.close_dialog()
+            self.import_preview_dialog()
+        except (AppError, OSError, TypeError, UnicodeError, ValueError) as error:
+            self.feedback(str(error), error=True)
 
+    def import_users_dialog(self) -> None:
+        async def download_example() -> None:
+            try:
+                await self.file_picker.save_file(
+                    file_name="user-import-example.xlsx",
+                    file_type=ft.FilePickerFileType.CUSTOM,
+                    allowed_extensions=["xlsx"],
+                    src_bytes=template_bytes("xlsx"),
+                )
+            except (OSError, ValueError) as error:
+                self.feedback(f"ดาวน์โหลดไฟล์ตัวอย่างไม่สำเร็จ: {error}", error=True)
+
+        pick_action = ft.PickFiles(
+            self.file_picker,
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["csv", "xlsx"],
+            with_data=True,
+            cancel_upload_on_window_blur=False,
+        )
         content = ft.Column(
             [
-                ft.Text("ดาวน์โหลด template เติมข้อมูล แล้วเลือกไฟล์เพื่อดูก่อนนำเข้า", color=MUTED),
-                ft.Row([ft.OutlinedButton("Template CSV", on_click=lambda _: self.page.run_task(download, "csv")), ft.OutlinedButton("Template XLSX", on_click=lambda _: self.page.run_task(download, "xlsx"))], wrap=True),
+                ft.Text("เลือกไฟล์ CSV หรือ XLSX เพื่อดูก่อนนำเข้า", color=MUTED),
+                ft.OutlinedButton(
+                    "ดาวน์โหลดไฟล์ตัวอย่าง (.xlsx)",
+                    icon=ft.Icons.DOWNLOAD_OUTLINED,
+                    on_click=lambda _: self.page.run_task(download_example),
+                ),
             ],
             spacing=14,
             tight=True,
         )
-        self.dialog("Import ผู้ใช้", content, "เลือกไฟล์", lambda event: self.page.run_task(pick, event))
+        self.dialog("Import ผู้ใช้", content, "เลือกไฟล์", action=pick_action)
 
     def import_preview_dialog(self) -> None:
         preview = self.pending_import
