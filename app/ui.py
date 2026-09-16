@@ -56,14 +56,18 @@ def card(content: ft.Control, *, padding: int = 20) -> ft.Container:
     )
 
 
-def title(text: str, subtitle: str = "", action: ft.Control | None = None) -> ft.Row:
+def title(text: str, subtitle: str = "", action: ft.Control | None = None, *, mobile: bool = False) -> ft.Control:
     heading = ft.Column(
-        [ft.Text(text, size=26, weight=ft.FontWeight.BOLD, color=TEXT), ft.Text(subtitle, size=13, color=MUTED, visible=bool(subtitle))],
+        [ft.Text(text, size=22 if mobile else 26, weight=ft.FontWeight.BOLD, color=TEXT), ft.Text(subtitle, size=13, color=MUTED, visible=bool(subtitle))],
         spacing=2,
         tight=True,
-        expand=True,
     )
-    return ft.Row([heading, action] if action else [heading], vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    if not action:
+        return heading
+    if mobile:
+        return ft.Column([heading, action], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.START)
+    heading.expand = True
+    return ft.Row([heading, action], vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
 
 def status_chip(status: str) -> ft.Container:
@@ -165,6 +169,8 @@ def dropdown(label: str, rows, *, value: int | str | None = None, hint: str = "�
 
 
 class AppUI:
+    mobile: bool = False
+
     def __init__(self, page: ft.Page, service: AppService | None = None) -> None:
         self.page = page
         self.service = service or AppService()
@@ -207,10 +213,16 @@ class AppUI:
         self.page.run_task(self._reminder_loop)
 
     def _resize(self, event) -> None:
-        mobile = bool(event.width and event.width < 900)
-        if mobile != self.mobile:
+        width = getattr(event, "width", None) or self.page.width
+        mobile = bool(width and width < 900)
+        last_w = getattr(self, "_last_width", 0)
+        if mobile != self.mobile or (self.mobile and abs(last_w - (width or 0)) > 20):
+            self._last_width = width or 0
             self.mobile = mobile
             self.render()
+
+    def page_title(self, text: str, subtitle: str = "", action: ft.Control | None = None) -> ft.Control:
+        return title(text, subtitle, action, mobile=self.mobile)
 
     def feedback(self, message: str, *, error: bool = False) -> None:
         self.page.show_dialog(
@@ -228,11 +240,13 @@ class AppUI:
             pass
 
     def dialog(self, heading: str, content: ft.Control, save_text: str, on_save=None, *, width: int = 620, action=None) -> None:
+        pw = getattr(self.page, "width", None)
+        target_width = min(width, max(280, int(pw - 48))) if (pw and pw < width + 48) else width
         self.page.show_dialog(
             ft.AlertDialog(
                 modal=True,
-                title=ft.Text(heading, size=20, weight=ft.FontWeight.BOLD),
-                content=ft.Container(content, width=width),
+                title=ft.Text(heading, size=18 if self.mobile else 20, weight=ft.FontWeight.BOLD),
+                content=ft.Container(content, width=target_width),
                 actions=[
                     ft.TextButton("ยกเลิก", on_click=lambda _: self.close_dialog()),
                     ft.Button(save_text, bgcolor=PRIMARY, color=ft.Colors.WHITE, on_click=on_save, action=action),
@@ -270,8 +284,8 @@ class AppUI:
         form = card(
             ft.Column(
                 [
-                    ft.Text("เข้าสู่ระบบ", size=30, weight=ft.FontWeight.BOLD, color=TEXT),
-                    ft.Text("ระบบยืม–คืนอุปกรณ์ สาขาวิทยาการคอมพิวเตอร์", color=MUTED),
+                    ft.Text("เข้าสู่ระบบ", size=26 if self.mobile else 30, weight=ft.FontWeight.BOLD, color=TEXT),
+                    ft.Text("ระบบยืม–คืนอุปกรณ์ สาขาวิทยาการคอมพิวเตอร์", size=13 if self.mobile else 14, color=MUTED),
                     username,
                     password,
                     message,
@@ -280,16 +294,23 @@ class AppUI:
                     ft.OutlinedButton("เข้าสู่ระบบด้วย LINE", icon=ft.Icons.CHAT_BUBBLE_OUTLINE, height=48, on_click=lambda _: self.start_line_login()),
                     ft.Text("ผู้ใช้ใหม่ต้องเปลี่ยนรหัสผ่านก่อนเริ่มใช้งาน", size=12, color=MUTED),
                 ],
-                spacing=16,
+                spacing=14 if self.mobile else 16,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 tight=True,
-            )
+            ),
+            padding=20 if self.mobile else 28,
         )
-        form.width = 440
-        form.height = 500
+        pw = getattr(self.page, "width", None)
+        form.width = min(440, max(280, int(pw - 32))) if (pw and pw < 472) else 440
         return ft.Container(
-            ft.Row([form], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-            padding=24,
+            ft.Column(
+                [form],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
+            padding=16 if self.mobile else 24,
             bgcolor=CANVAS,
             expand=True,
         )
@@ -408,10 +429,10 @@ class AppUI:
                 message.value = str(error)
                 message.update()
 
-        content = card(
+        form_card = card(
             ft.Column(
                 [
-                    ft.Text("ตั้งรหัสผ่านใหม่" if forced else "เปลี่ยนรหัสผ่าน", size=24, weight=ft.FontWeight.BOLD),
+                    ft.Text("ตั้งรหัสผ่านใหม่" if forced else "เปลี่ยนรหัสผ่าน", size=22 if self.mobile else 24, weight=ft.FontWeight.BOLD),
                     ft.Text(
                         "ยืนยันบัญชีผ่าน LINE แล้ว กรุณาตั้งรหัสผ่านใหม่ก่อนเริ่มใช้งาน"
                         if verified_initial_password is not None
@@ -429,9 +450,26 @@ class AppUI:
                 ],
                 spacing=14,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-            )
+                tight=True,
+            ),
+            padding=20 if self.mobile else 24,
         )
-        return ft.Container(content, width=520, alignment=ft.Alignment.CENTER, padding=24, bgcolor=CANVAS, expand=True)
+        if not forced:
+            return form_card
+        pw = getattr(self.page, "width", None)
+        form_card.width = min(480, max(280, int(pw - 32))) if (pw and pw < 512) else 480
+        return ft.Container(
+            ft.Column(
+                [form_card],
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
+            padding=16 if self.mobile else 24,
+            bgcolor=CANVAS,
+            expand=True,
+        )
 
     def navigation(self):
         if self.user.role == "admin":  # type: ignore[union-attr]
@@ -457,30 +495,140 @@ class AppUI:
         self.query = ""
         self.render()
 
+    def open_mobile_menu(self) -> None:
+        items = self.navigation()
+        nav_route = "loans" if self.route == "new_loan" else self.route
+
+        def select_route(target: str) -> None:
+            self.close_dialog()
+            self.go(target)
+
+        menu_buttons = [
+            ft.TextButton(
+                label,
+                icon=icon,
+                height=48,
+                width=float("inf"),
+                style=ft.ButtonStyle(
+                    bgcolor="#eaf2ff" if route == nav_route else ft.Colors.TRANSPARENT,
+                    color=PRIMARY if route == nav_route else TEXT,
+                    icon_color=PRIMARY if route == nav_route else TEXT,
+                    shape=ft.RoundedRectangleBorder(radius=12),
+                    alignment=ft.Alignment.CENTER_LEFT,
+                ),
+                on_click=lambda _, target=route: select_route(target),
+            )
+            for route, label, icon in items
+        ]
+
+        user_info = ft.Container(
+            ft.Row(
+                [
+                    ft.CircleAvatar(content=ft.Text(self.user.full_name[:1]), bgcolor="#eaf2ff", color=PRIMARY, radius=18),
+                    ft.Column(
+                        [
+                            ft.Text(self.user.full_name, size=14, weight=ft.FontWeight.W_600),
+                            ft.Text(f"@{self.user.username} · {ROLE_LABELS[self.user.role]}", size=11, color=MUTED),
+                        ],
+                        spacing=1,
+                        expand=True,
+                    ),
+                ],
+                spacing=10,
+            ),
+            padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+            bgcolor=SOFT,
+            border_radius=12,
+        )
+
+        sheet = ft.BottomSheet(
+            content=ft.Container(
+                ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Row(
+                                    [
+                                        ft.Container(ft.Icon(ft.Icons.INVENTORY_2_OUTLINED, color=PRIMARY, size=20), padding=6, bgcolor="#eaf2ff", border_radius=8),
+                                        ft.Text("เมนูระบบ", weight=ft.FontWeight.BOLD, size=18, color=TEXT),
+                                    ],
+                                    spacing=8,
+                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                ),
+                                ft.IconButton(icon=ft.Icons.CLOSE, tooltip="ปิด", on_click=lambda _: self.close_dialog()),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        user_info,
+                        ft.Divider(height=1),
+                        *menu_buttons,
+                        ft.Divider(height=1),
+                        ft.TextButton(
+                            "ออกจากระบบ",
+                            icon=ft.Icons.LOGOUT,
+                            height=48,
+                            width=float("inf"),
+                            style=ft.ButtonStyle(
+                                color=DANGER,
+                                icon_color=DANGER,
+                                shape=ft.RoundedRectangleBorder(radius=12),
+                                alignment=ft.Alignment.CENTER_LEFT,
+                            ),
+                            on_click=lambda _: (self.close_dialog(), self.logout()),
+                        ),
+                    ],
+                    spacing=6,
+                    tight=True,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+                padding=16,
+                bgcolor=SURFACE,
+                border_radius=ft.BorderRadius(top_left=24, top_right=24, bottom_left=0, bottom_right=0),
+            ),
+            show_drag_handle=True,
+            scrollable=True,
+        )
+        self.page.show_dialog(sheet)
+
     def shell(self) -> ft.Control:
         items = self.navigation()
         allowed_routes = {item[0] for item in items} | ({"new_loan"} if self.user.role == "admin" else set())  # type: ignore[union-attr]
         if self.route not in allowed_routes:
             self.route = items[0][0]
         nav_route = "loans" if self.route == "new_loan" else self.route
-        content = ft.Container(self.route_content(), padding=20 if self.mobile else 32, bgcolor=CANVAS, expand=True)
+        content = ft.Container(self.route_content(), padding=16 if self.mobile else 32, bgcolor=CANVAS, expand=True)
         if self.mobile:
-            page_selector = ft.Dropdown(
-                value=nav_route,
-                options=[ft.DropdownOption(key=route, text=label) for route, label, _ in items],
-                on_select=lambda event: self.go(event.control.value),
-                width=180,
-                dense=True,
-            )
+            current_item = next((item for item in items if item[0] == nav_route), None)
+            current_label = current_item[1] if current_item else "เมนูหลัก"
             mobile_header = ft.Container(
                 ft.Row(
                     [
-                        ft.Text("LAB LENDING", weight=ft.FontWeight.BOLD, color=PRIMARY, expand=True),
-                        page_selector,
-                        ft.IconButton(icon=ft.Icons.LOGOUT, tooltip="ออกจากระบบ", on_click=lambda _: self.logout()),
-                    ]
+                        ft.IconButton(
+                            icon=ft.Icons.MENU,
+                            tooltip="เมนูนำทาง",
+                            on_click=lambda _: self.open_mobile_menu(),
+                        ),
+                        ft.Column(
+                            [
+                                ft.Text(current_label, size=15, weight=ft.FontWeight.BOLD, color=TEXT),
+                                ft.Text("LAB LENDING", size=10, color=PRIMARY, weight=ft.FontWeight.W_600),
+                            ],
+                            spacing=0,
+                            expand=True,
+                            alignment=ft.MainAxisAlignment.CENTER,
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.LOGOUT,
+                            tooltip="ออกจากระบบ",
+                            icon_size=20,
+                            on_click=lambda _: self.logout(),
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=6,
                 ),
-                padding=ft.Padding.symmetric(horizontal=20, vertical=10),
+                padding=ft.Padding.symmetric(horizontal=10, vertical=6),
                 bgcolor=SURFACE,
                 border=ft.Border.only(bottom=ft.BorderSide(1, BORDER)),
             )
@@ -561,26 +709,52 @@ class AppUI:
             else [("รายการของฉัน", metrics["active"]), ("เกินกำหนด", metrics["overdue"]), ("อุปกรณ์พร้อมยืม", metrics["available"])]
         )
         cards = ft.ResponsiveRow(
-            [card(ft.Column([ft.Text(label, color=MUTED), ft.Text(str(value), size=30, weight=ft.FontWeight.BOLD, color=DANGER if label == "เกินกำหนด" and value else TEXT)], spacing=4), padding=16) for label, value in definitions],
+            [card(ft.Column([ft.Text(label, color=MUTED, size=12 if self.mobile else 13), ft.Text(str(value), size=24 if self.mobile else 30, weight=ft.FontWeight.BOLD, color=DANGER if label == "เกินกำหนด" and value else TEXT)], spacing=4), padding=12 if self.mobile else 16) for label, value in definitions],
             columns=12,
-            spacing=12,
+            spacing=10 if self.mobile else 12,
+            run_spacing=10 if self.mobile else 12,
         )
-        for item in cards.controls:
-            item.col = {"xs": 6, "md": 4, "lg": 2.4 if self.user.role == "admin" else 4}  # type: ignore[union-attr]
+        for index, item in enumerate(cards.controls):
+            if self.user.role == "admin":  # type: ignore[union-attr]
+                item.col = {"xs": 12 if (self.mobile and index == 4) else 6, "sm": 6, "md": 4, "lg": 2.4}
+            else:
+                item.col = {"xs": 12, "sm": 4, "md": 4}
         loans = self.service.list_loans(status="active", borrower_id=None if self.user.role == "admin" else self.user.id)  # type: ignore[union-attr]
         return ft.Column(
-            [title("ภาพรวม", "งานและรายการสำคัญวันนี้"), cards, ft.Text("รายการที่กำลังยืม", size=18, weight=ft.FontWeight.BOLD), self.loan_cards(loans[:8])],
+            [self.page_title("ภาพรวม", "งานและรายการสำคัญวันนี้"), cards, ft.Text("รายการที่กำลังยืม", size=18, weight=ft.FontWeight.BOLD), self.loan_cards(loans[:8])],
             spacing=18,
             expand=True,
             scroll=ft.ScrollMode.AUTO,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
 
-    def search_bar(self, hint: str, action) -> ft.Row:
-        field = ft.TextField(value=self.query, hint_text=hint, prefix_icon=ft.Icons.SEARCH, expand=True, height=48, border_radius=12, on_submit=lambda _: action(field.value or ""))
+    def search_bar(self, hint: str, action) -> ft.Container:
+        field = ft.TextField(
+            value=self.query,
+            hint_text=hint,
+            prefix_icon=ft.Icons.SEARCH,
+            expand=True,
+            height=48,
+            border_radius=12,
+            on_submit=lambda _: action(field.value or ""),
+        )
+        pw = getattr(self.page, "width", None)
+        compact = bool(pw and pw < 400)
         return ft.Container(
-            ft.Row([field, ft.Button("ค้นหา", icon=ft.Icons.SEARCH, height=44, on_click=lambda _: action(field.value or ""))]),
-            padding=12,
+            ft.Row(
+                [
+                    field,
+                    ft.Button(
+                        "" if compact else "ค้นหา",
+                        icon=ft.Icons.SEARCH,
+                        height=44,
+                        tooltip="ค้นหา",
+                        on_click=lambda _: action(field.value or ""),
+                    ),
+                ],
+                spacing=8,
+            ),
+            padding=10 if self.mobile else 12,
             bgcolor=SURFACE,
             border=ft.Border.all(1, BORDER),
             border_radius=16,
@@ -592,7 +766,7 @@ class AppUI:
 
     def table(self, headers: list[str], rows: list[list[ft.Control]], empty_text: str) -> ft.Control:
         viewport = int(self.page.width or 1280)
-        content_width = viewport - (48 if self.mobile else 324)
+        content_width = viewport - (32 if self.mobile else 324)
         minimum_width = max(640, len(headers) * 120)
         return data_table(headers, rows, empty_text, width=max(content_width, minimum_width))
 
@@ -627,7 +801,7 @@ class AppUI:
     def history_view(self) -> ft.Control:
         loans = self.service.list_loans(self.query, borrower_id=None if self.user.role == "admin" else self.user.id)  # type: ignore[union-attr]
         return ft.Column(
-            [title("ประวัติการยืม–คืน", "ค้นหาด้วยรหัสรายการ ชื่อผู้ใช้ หรือชื่อผู้ยืม"), self.search_bar("ค้นหาประวัติ", self.set_query), self.loan_cards(loans)],
+            [self.page_title("ประวัติการยืม–คืน", "ค้นหาด้วยรหัสรายการ ชื่อผู้ใช้ หรือชื่อผู้ยืม"), self.search_bar("ค้นหาประวัติ", self.set_query), self.loan_cards(loans)],
             spacing=16,
             expand=True,
             scroll=ft.ScrollMode.AUTO,
@@ -636,12 +810,12 @@ class AppUI:
 
     def my_loans_view(self) -> ft.Control:
         loans = self.service.list_loans(status="active", borrower_id=self.user.id)  # type: ignore[union-attr]
-        return ft.Column([title("ของที่กำลังยืม", "ตรวจวันครบกำหนดและรายการคงค้างของคุณ"), self.loan_cards(loans)], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
+        return ft.Column([self.page_title("ของที่กำลังยืม", "ตรวจวันครบกำหนดและรายการคงค้างของคุณ"), self.loan_cards(loans)], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
 
     def available_view(self) -> ft.Control:
         units = self.service.list_units(self.query, "available")
         rows = [[ft.Text(row["asset_code"], weight=ft.FontWeight.W_600), ft.Text(row["type_name"]), ft.Text(row["category_name"]), ft.Text(row["storage_location"]), status_chip("available")] for row in units]
-        return ft.Column([title("อุปกรณ์พร้อมยืม", "ดูรายการได้ แต่การยืมต้องให้ผู้ดูแลเป็นผู้ทำรายการ"), self.search_bar("ค้นหาชื่อหรือ asset code", self.set_query), self.table(["Asset code", "ชนิดอุปกรณ์", "หมวดหมู่", "ตำแหน่ง", "สถานะ"], rows, "ไม่พบอุปกรณ์พร้อมยืม")], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
+        return ft.Column([self.page_title("อุปกรณ์พร้อมยืม", "ดูรายการได้ แต่การยืมต้องให้ผู้ดูแลเป็นผู้ทำรายการ"), self.search_bar("ค้นหาชื่อหรือ asset code", self.set_query), self.table(["Asset code", "ชนิดอุปกรณ์", "หมวดหมู่", "ตำแหน่ง", "สถานะ"], rows, "ไม่พบอุปกรณ์พร้อมยืม")], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
 
     async def _reminder_loop(self) -> None:
         while True:
@@ -653,7 +827,7 @@ class AppUI:
         active_loans = self.service.list_loans(self.query, status="active")
         action = ft.Button("ทำรายการยืม", icon=ft.Icons.ADD, bgcolor=PRIMARY, color=ft.Colors.WHITE, height=44, on_click=lambda _: self.go("new_loan"))
         return ft.Column(
-            [title("รายการยืม–คืน", "ค้นหารายการที่กำลังยืมและรับคืนอุปกรณ์", action), self.search_bar("ค้นหาเลขรายการ ชื่อ หรือ username", self.set_query), self.loan_cards(active_loans)],
+            [self.page_title("รายการยืม–คืน", "ค้นหารายการที่กำลังยืมและรับคืนอุปกรณ์", action), self.search_bar("ค้นหาเลขรายการ ชื่อ หรือ username", self.set_query), self.loan_cards(active_loans)],
             spacing=16,
             expand=True,
             scroll=ft.ScrollMode.AUTO,
@@ -682,13 +856,13 @@ class AppUI:
         borrow_date = ft.TextField(
             label="วันยืม (YYYY-MM-DD)",
             value=self.loan_borrow_date,
-            width=240,
+            width=None if self.mobile else 220,
             on_change=lambda event: setattr(self, "loan_borrow_date", event.control.value or ""),
         )
         due_date = ft.TextField(
             label="วันครบกำหนด (YYYY-MM-DD)",
             value=self.loan_due_date,
-            width=240,
+            width=None if self.mobile else 220,
             on_change=lambda event: setattr(self, "loan_due_date", event.control.value or ""),
         )
         selected_text = ft.Text(f"เลือกแล้ว {len(self.selected_unit_ids)} ชิ้น", color=PRIMARY, weight=ft.FontWeight.W_600)
@@ -778,7 +952,7 @@ class AppUI:
                         bgcolor=SURFACE,
                     ),
                     ft.Text("3. กำหนดวันคืน", size=18, weight=ft.FontWeight.BOLD),
-                    ft.Row([borrow_date, due_date], wrap=True),
+                    ft.Column([borrow_date, due_date], spacing=10) if self.mobile else ft.Row([borrow_date, due_date], spacing=12),
                     ft.Row(
                         [
                             ft.OutlinedButton("+3 วัน", on_click=lambda _: self._set_loan_due_date(due_date, today + timedelta(days=3))),
@@ -786,20 +960,25 @@ class AppUI:
                             ft.OutlinedButton("+14 วัน", on_click=lambda _: self._set_loan_due_date(due_date, today + timedelta(days=14))),
                         ],
                         wrap=True,
+                        spacing=8,
                     ),
                     ft.Row(
                         [
                             ft.OutlinedButton("ยกเลิก", icon=ft.Icons.ARROW_BACK, on_click=lambda _: self.go("loans")),
                             ft.Button("ตรวจสอบและยืนยัน", icon=ft.Icons.CHECK_CIRCLE_OUTLINE, bgcolor=PRIMARY, color=ft.Colors.WHITE, height=48, on_click=request_create),
                         ],
-                        alignment=ft.MainAxisAlignment.END,
+                        alignment=ft.MainAxisAlignment.END if not self.mobile else ft.MainAxisAlignment.SPACE_BETWEEN,
+                        wrap=True,
+                        spacing=10,
+                        run_spacing=10,
                     ),
                 ],
                 spacing=12,
-            )
+            ),
+            padding=14 if self.mobile else 20,
         )
         return ft.Column(
-            [title("ทำรายการยืมใหม่", "เลือกผู้ยืมและอุปกรณ์หลายชิ้นในรายการเดียว"), create_panel],
+            [self.page_title("ทำรายการยืมใหม่", "เลือกผู้ยืมและอุปกรณ์หลายชิ้นในรายการเดียว"), create_panel],
             spacing=16,
             expand=True,
             scroll=ft.ScrollMode.AUTO,
@@ -887,7 +1066,7 @@ class AppUI:
                     ),
                 ]
             )
-        return ft.Column([title("ผู้ใช้", "สร้าง แก้ไข ปิดใช้งาน รีเซ็ตรหัส และ import", actions), self.search_bar("ค้นหาชื่อหรือ username", self.set_query), self.table(["ชื่อ", "Username", "บทบาท", "ประเภท / สังกัด", "สถานะ", "จัดการ"], table_rows, "ไม่พบผู้ใช้")], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
+        return ft.Column([self.page_title("ผู้ใช้", "สร้าง แก้ไข ปิดใช้งาน รีเซ็ตรหัส และ import", actions), self.search_bar("ค้นหาชื่อหรือ username", self.set_query), self.table(["ชื่อ", "Username", "บทบาท", "ประเภท / สังกัด", "สถานะ", "จัดการ"], table_rows, "ไม่พบผู้ใช้")], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
 
     def user_dialog(self, row=None) -> None:
         username = ft.TextField(label="Username *", value=row["username"] if row else "")
@@ -906,7 +1085,12 @@ class AppUI:
         department = dropdown("สาขา", [item for item in departments if item["faculty_id"] == faculty_value], value=department_value)
         cohort = dropdown("รุ่น", [item for item in cohorts if item["department_id"] == department_value], value=cohort_value)
         class_group = dropdown("หมู่เรียน", [item for item in groups if item["cohort_id"] == cohort_value], value=row["class_group_id"] if row else None)
-        student_fields = ft.Row([cohort, class_group], visible=(user_type.value == "student"))
+        role_type_fields = ft.Column([role, user_type], spacing=10) if self.mobile else ft.Row([role, user_type])
+        student_fields = (
+            ft.Column([cohort, class_group], spacing=10, visible=(user_type.value == "student"))
+            if self.mobile
+            else ft.Row([cohort, class_group], visible=(user_type.value == "student"))
+        )
         affiliation = ft.Column([ft.Text("สังกัดของผู้ยืม", weight=ft.FontWeight.BOLD), faculty, department, student_fields], spacing=12, visible=(role.value == "borrower"))
 
         def replace_options(field: ft.Dropdown, records) -> None:
@@ -966,7 +1150,7 @@ class AppUI:
 
         self.dialog(
             "แก้ไขผู้ใช้" if row else "เพิ่มผู้ใช้",
-            ft.Column([username, ft.Text("3–50 ตัว: อังกฤษ ตัวเลข . _ -", size=12, color=MUTED), full_name, email, ft.Row([role, user_type]), affiliation], spacing=12, tight=True),
+            ft.Column([username, ft.Text("3–50 ตัว: อังกฤษ ตัวเลข . _ -", size=12, color=MUTED), full_name, email, role_type_fields, affiliation], spacing=12, tight=True),
             "บันทึก",
             save,
         )
@@ -1059,17 +1243,34 @@ class AppUI:
         preview = self.pending_import
         if preview is None:
             return
-        rows = [
-            ft.Row(
-                [
-                    ft.Text(f"แถว {row.number}", width=70),
-                    ft.Text(row.values["username"] or "-", width=130),
-                    ft.Text(row.values["full_name"] or "-", expand=True),
-                    ft.Text("พร้อมนำเข้า" if not row.errors else ", ".join(row.errors), color=SUCCESS if not row.errors else DANGER, expand=True),
-                ]
-            )
-            for row in preview.rows
-        ]
+        if self.mobile:
+            rows = [
+                ft.Container(
+                    ft.Column(
+                        [
+                            ft.Row([ft.Text(f"แถว {row.number}", weight=ft.FontWeight.BOLD), ft.Text(f"@{row.values['username'] or '-'}", color=MUTED)]),
+                            ft.Text(row.values["full_name"] or "-", weight=ft.FontWeight.W_500),
+                            ft.Text("พร้อมนำเข้า" if not row.errors else ", ".join(row.errors), color=SUCCESS if not row.errors else DANGER, size=12),
+                        ],
+                        spacing=2,
+                    ),
+                    padding=ft.Padding.symmetric(vertical=6),
+                    border=ft.Border.only(bottom=ft.BorderSide(1, BORDER)),
+                )
+                for row in preview.rows
+            ]
+        else:
+            rows = [
+                ft.Row(
+                    [
+                        ft.Text(f"แถว {row.number}", width=70),
+                        ft.Text(row.values["username"] or "-", width=130),
+                        ft.Text(row.values["full_name"] or "-", expand=True),
+                        ft.Text("พร้อมนำเข้า" if not row.errors else ", ".join(row.errors), color=SUCCESS if not row.errors else DANGER, expand=True),
+                    ]
+                )
+                for row in preview.rows
+            ]
 
         def commit(_):
             created, errors = import_preview(self.service, self.user.id, preview)  # type: ignore[union-attr]
@@ -1120,7 +1321,7 @@ class AppUI:
             ] for row in rows]
             table = self.table(["Asset code", "ชนิดอุปกรณ์", "หมวดหมู่", "ยี่ห้อ / รุ่น", "ตำแหน่ง", "สถานะ", "จัดการ"], table_rows, "ไม่พบอุปกรณ์")
         return ft.Column(
-            [title("อุปกรณ์", "แยกชนิดอุปกรณ์ออกจากทรัพย์สินแต่ละชิ้น", action), tabs, self.search_bar("ค้นหาชื่อ รุ่น asset code หรือตำแหน่ง", self.set_query), table],
+            [self.page_title("อุปกรณ์", "แยกชนิดอุปกรณ์ออกจากทรัพย์สินแต่ละชิ้น", action), tabs, self.search_bar("ค้นหาชื่อ รุ่น asset code หรือตำแหน่ง", self.set_query), table],
             spacing=16,
             expand=True,
             scroll=ft.ScrollMode.AUTO,
@@ -1133,10 +1334,12 @@ class AppUI:
         self.render()
 
     def equipment_type_dialog(self, row=None) -> None:
+        categories = self.service.list_master("category", active_only=True)
         name = ft.TextField(label="ชื่อชนิดอุปกรณ์ *", value=row["name"] if row else "")
-        category = dropdown("หมวดหมู่ *", self.service.list_master("category", active_only=True), value=row["category_id"] if row else None)
-        brand = ft.TextField(label="ยี่ห้อ", value=(row["brand"] or "") if row else "")
-        model = ft.TextField(label="รุ่น", value=(row["model"] or "") if row else "")
+        category = dropdown("หมวดหมู่ *", categories, value=row["category_id"] if row else None)
+        brand = ft.TextField(label="ยี่ห้อ", value=(row["brand"] or "") if row else "", expand=True if not self.mobile else None)
+        model = ft.TextField(label="รุ่น", value=(row["model"] or "") if row else "", expand=True if not self.mobile else None)
+        brand_model_row = ft.Column([brand, model], spacing=10) if self.mobile else ft.Row([brand, model])
         description = ft.TextField(label="รายละเอียด", value=(row["description"] or "") if row else "", multiline=True, min_lines=2)
 
         def save(_):
@@ -1158,7 +1361,7 @@ class AppUI:
             except (AppError, ValueError) as error:
                 self.feedback(str(error), error=True)
 
-        self.dialog("แก้ไขชนิดอุปกรณ์" if row else "เพิ่มชนิดอุปกรณ์", ft.Column([name, category, ft.Row([brand, model]), description], spacing=12, tight=True), "บันทึก", save)
+        self.dialog("แก้ไขชนิดอุปกรณ์" if row else "เพิ่มชนิดอุปกรณ์", ft.Column([name, category, brand_model_row, description], spacing=12, tight=True), "บันทึก", save)
 
     def equipment_type_status_dialog(self, row) -> None:
         status = "inactive" if row["status"] == "active" else "active"
@@ -1254,7 +1457,7 @@ class AppUI:
         )
         return ft.Column(
             [
-                title("ข้อมูลอ้างอิงระบบ", "รายการตัวเลือกที่นำไปใช้ในข้อมูลผู้ใช้และอุปกรณ์", ft.Button(f"เพิ่ม{labels[self.master_kind]}", icon=ft.Icons.ADD, bgcolor=PRIMARY, color=ft.Colors.WHITE, on_click=lambda _: self.master_dialog())),
+                self.page_title("ข้อมูลอ้างอิงระบบ", "รายการตัวเลือกที่นำไปใช้ในข้อมูลผู้ใช้และอุปกรณ์", ft.Button(f"เพิ่ม{labels[self.master_kind]}", icon=ft.Icons.ADD, bgcolor=PRIMARY, color=ft.Colors.WHITE, on_click=lambda _: self.master_dialog())),
                 kind_tabs,
                 guide,
                 self.table([labels[self.master_kind], "อยู่ภายใต้", "สถานะ", "จัดการ"], table_rows, f"ยังไม่มีข้อมูล{labels[self.master_kind]}"),
@@ -1288,8 +1491,7 @@ class AppUI:
             except (AppError, ValueError) as error:
                 self.feedback(str(error), error=True)
 
-        controls = [name] + ([parent] if parent else [])
-        self.dialog(f"{'แก้ไข' if row else 'เพิ่ม'}{labels[self.master_kind]}", ft.Column(controls, spacing=12, tight=True), "บันทึก", save)
+        self.dialog(f"{'แก้ไข' if row else 'เพิ่ม'}{labels[self.master_kind]}", ft.Column([control for control in (name, parent) if control], spacing=12, tight=True), "บันทึก", save)
 
     def master_status_dialog(self, row) -> None:
         status = "inactive" if row["status"] == "active" else "active"
@@ -1313,18 +1515,30 @@ class AppUI:
             if self.user.line_user_id  # type: ignore[union-attr]
             else ft.Button("เชื่อม LINE", icon=ft.Icons.LINK, bgcolor=PRIMARY, color=ft.Colors.WHITE, on_click=lambda _: self.start_line_login())
         )
+        line_section = (
+            ft.Column(
+                [
+                    ft.Row([ft.Text("สถานะ LINE", weight=ft.FontWeight.W_600), ft.Text(line_status, color=SUCCESS if self.user.line_user_id else MUTED)]),  # type: ignore[union-attr]
+                    line_action,
+                ],
+                spacing=8,
+            )
+            if self.mobile
+            else ft.Row([ft.Text("สถานะ LINE", expand=True), ft.Text(line_status, color=SUCCESS if self.user.line_user_id else MUTED), line_action])  # type: ignore[union-attr]
+        )
         profile = card(
             ft.Column(
                 [
                     ft.Text(self.user.full_name, size=22, weight=ft.FontWeight.BOLD),  # type: ignore[union-attr]
                     ft.Text(f"@{self.user.username} · {ROLE_LABELS[self.user.role]} · {TYPE_LABELS[self.user.user_type]}", color=MUTED),  # type: ignore[union-attr]
                     ft.Divider(),
-                    ft.Row([ft.Text("สถานะ LINE", expand=True), ft.Text(line_status, color=SUCCESS if self.user.line_user_id else MUTED), line_action]),  # type: ignore[union-attr]
+                    line_section,
                 ],
                 spacing=12,
-            )
+            ),
+            padding=16 if self.mobile else 20,
         )
-        return ft.Column([title("บัญชี", "รหัสผ่านและการเชื่อม LINE"), profile, self.password_screen(forced=False)], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
+        return ft.Column([self.page_title("บัญชี", "รหัสผ่านและการเชื่อม LINE"), profile, self.password_screen(forced=False)], spacing=16, expand=True, scroll=ft.ScrollMode.AUTO)
 
     def unlink_line_dialog(self) -> None:
         def unlink(_):
