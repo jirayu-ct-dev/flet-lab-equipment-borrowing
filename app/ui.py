@@ -183,7 +183,9 @@ class AppUI:
         self.pending_import: ImportPreview | None = None
         self.mobile = bool(self.page.width and self.page.width < 900)
         self.file_picker = ft.FilePicker()
+        self.preferences = ft.SharedPreferences()
         self.page.services.append(self.file_picker)
+        self.page.services.append(self.preferences)
         self.page.add(self.root)
         self.page.on_login = self._line_authorized
         self.page.on_resize = self._resize
@@ -192,6 +194,8 @@ class AppUI:
         if self.user and self.user.status != "active":
             self.user = None
         self.render()
+        if self.user is None:
+            self.page.run_task(self._restore_persistent_login)
         self.page.run_task(self._reminder_loop)
 
     def _resize(self, event) -> None:
@@ -279,16 +283,47 @@ class AppUI:
             expand=True,
         )
 
-    def login(self, user: User) -> None:
+    async def _restore_persistent_login(self) -> None:
+        token = await self.preferences.get("auth_token")
+        user = self.service.user_for_session(token if isinstance(token, str) else None)
+        if user is None:
+            if token is not None:
+                await self.preferences.remove("auth_token")
+            return
         self.user = user
         self.page.session.store.set("user_id", user.id)
         self.route = "dashboard"
         self.render()
 
+    async def _persist_login(self, user_id: int) -> None:
+        if self.user is None or self.user.id != user_id:
+            return
+        previous = await self.preferences.get("auth_token")
+        if isinstance(previous, str):
+            self.service.revoke_session(previous)
+        token = self.service.create_session(user_id)
+        if self.user is not None and self.user.id == user_id:
+            await self.preferences.set("auth_token", token)
+        else:
+            self.service.revoke_session(token)
+
+    async def _clear_persistent_login(self) -> None:
+        token = await self.preferences.get("auth_token")
+        self.service.revoke_session(token if isinstance(token, str) else None)
+        await self.preferences.remove("auth_token")
+
+    def login(self, user: User) -> None:
+        self.user = user
+        self.page.session.store.set("user_id", user.id)
+        self.route = "dashboard"
+        self.render()
+        self.page.run_task(self._persist_login, user.id)
+
     def logout(self) -> None:
         self.user = None
         self.page.session.store.remove("user_id")
         self.render()
+        self.page.run_task(self._clear_persistent_login)
 
     def start_line_login(self) -> None:
         line_provider = provider()
@@ -345,6 +380,7 @@ class AppUI:
                 return
             try:
                 self.user = self.service.change_password(self.user.id, current.value or "", new.value or "")  # type: ignore[union-attr]
+                self.page.run_task(self._persist_login, self.user.id)
                 self.feedback("เปลี่ยนรหัสผ่านแล้ว")
                 self.render()
             except AppError as error:

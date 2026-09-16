@@ -5,10 +5,10 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from app.database import bangkok_today, connect, initialize_database, utc_text
+from app.database import bangkok_today, connect, initialize_database, utc_now, utc_text
 from app.errors import AuthenticationError, NotFoundError, PermissionDenied, ValidationError
 from app.models import LineMessage, User
-from app.security import hash_password, validate_password_strength, verify_password
+from app.security import hash_password, hash_session_token, new_session_token, validate_password_strength, verify_password
 
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{3,50}$")
@@ -19,6 +19,7 @@ MASTER_TABLES = {
     "class_group": ("class_groups", "cohort_id"),
     "category": ("equipment_categories", None),
 }
+SESSION_LIFETIME = timedelta(days=30)
 
 
 class AppService:
@@ -53,6 +54,46 @@ class AppService:
         with connect(self.path) as db:
             return self._user(db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
 
+    def create_session(self, user_id: int) -> str:
+        token = new_session_token()
+        now = utc_now()
+        with connect(self.path) as db:
+            db.execute("DELETE FROM auth_sessions WHERE expires_at <= ?", (utc_text(now),))
+            db.execute(
+                "INSERT INTO auth_sessions(token_hash, user_id, expires_at, last_used_at) VALUES (?, ?, ?, ?)",
+                (hash_session_token(token), user_id, utc_text(now + SESSION_LIFETIME), utc_text(now)),
+            )
+            db.commit()
+        return token
+
+    def user_for_session(self, token: str | None) -> User | None:
+        if not token:
+            return None
+        now = utc_text()
+        with connect(self.path) as db:
+            row = db.execute(
+                """SELECT u.* FROM auth_sessions AS s
+                   JOIN users AS u ON u.id = s.user_id
+                   WHERE s.token_hash = ? AND s.expires_at > ? AND u.status = 'active'""",
+                (hash_session_token(token), now),
+            ).fetchone()
+            if row is None:
+                return None
+            db.execute("UPDATE auth_sessions SET last_used_at = ? WHERE token_hash = ?", (now, hash_session_token(token)))
+            db.commit()
+            return self._user(row)
+
+    def revoke_session(self, token: str | None) -> None:
+        if not token:
+            return
+        with connect(self.path) as db:
+            db.execute("DELETE FROM auth_sessions WHERE token_hash = ?", (hash_session_token(token),))
+            db.commit()
+
+    @staticmethod
+    def _revoke_user_sessions(db: sqlite3.Connection, user_id: int) -> None:
+        db.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+
     def authenticate(self, username: str, password: str) -> User:
         with connect(self.path) as db:
             row = db.execute(
@@ -81,6 +122,7 @@ class AppService:
                 "UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?",
                 (hash_password(new_password), utc_text(), user_id),
             )
+            self._revoke_user_sessions(db, user_id)
             db.commit()
         return self.get_user(user_id)  # type: ignore[return-value]
 
@@ -287,6 +329,7 @@ class AppService:
                 "UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = ? WHERE id = ?",
                 (hash_password(password), utc_text(), user_id),
             )
+            self._revoke_user_sessions(db, user_id)
             db.commit()
             return password
 

@@ -54,3 +54,7 @@ def validate_password_strength(password: str) -> str | None:
 
 def new_session_token() -> str:
     return secrets.token_hex(32)
+
+
+def hash_session_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

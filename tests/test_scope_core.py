@@ -54,6 +54,14 @@ def test_new_database_has_one_forced_change_admin(service):
         service.authenticate("admin", "wrong")
 
 
+def test_persistent_session_restores_user_and_logout_revokes_it(service):
+    user = admin(service)
+    token = service.create_session(user.id)
+    assert service.user_for_session(token).id == user.id
+    service.revoke_session(token)
+    assert service.user_for_session(token) is None
+
+
 def test_new_user_password_is_username_and_username_is_case_insensitive(service):
     actor = admin(service)
     user = borrower(service, actor.id, "Student.One")

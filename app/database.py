@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    last_used_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS equipment_types (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE,
@@ -152,6 +160,8 @@ CREATE TABLE IF NOT EXISTS loan_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_units_status ON equipment_units(status);
 CREATE INDEX IF NOT EXISTS idx_loans_borrower_status ON loans(borrower_id, status);
 CREATE INDEX IF NOT EXISTS idx_loan_items_loan ON loan_items(loan_id);
