@@ -73,6 +73,11 @@ def template_bytes(extension: str) -> bytes:
     return output.getvalue()
 
 
+def _faculty_key(value: str) -> str:
+    """Match faculty names whether an import includes the optional 'คณะ' prefix."""
+    return " ".join(value.split()).casefold().removeprefix("คณะ").strip()
+
+
 def _read_rows(name: str, data: bytes) -> list[dict[str, str]]:
     suffix = Path(name).suffix.lower()
     if suffix == ".csv":
@@ -100,7 +105,7 @@ def preview_users(service: AppService, name: str, data: bytes) -> ImportPreview:
         raise ValidationError("ไฟล์ไม่มีข้อมูลผู้ใช้")
     existing = {row["username"].casefold() for row in service.list_users()}
     seen: set[str] = set()
-    faculties = {row["name"].strip().casefold(): row for row in service.list_master("faculty", active_only=True)}
+    faculties = {_faculty_key(row["name"]): row for row in service.list_master("faculty", active_only=True)}
     departments = {(row["faculty_id"], row["name"].strip().casefold()): row for row in service.list_master("department", active_only=True)}
     cohorts = {(row["department_id"], row["name"].strip().casefold()): row for row in service.list_master("cohort", active_only=True)}
     class_groups = {(row["cohort_id"], row["name"].strip().casefold()): row for row in service.list_master("class_group", active_only=True)}
@@ -131,7 +136,7 @@ def preview_users(service: AppService, name: str, data: bytes) -> ImportPreview:
             "user_type": values["user_type"],
         }
         if values["role"] == "borrower":
-            faculty = faculties.get(values["faculty"].casefold())
+            faculty = faculties.get(_faculty_key(values["faculty"]))
             department = departments.get((faculty["id"], values["department"].casefold())) if faculty else None
             if faculty is None:
                 errors.append("ไม่พบคณะ")
