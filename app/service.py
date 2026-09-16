@@ -697,7 +697,7 @@ class AppService:
         extra = "AND i.returned_at IS NULL" if outstanding_only else ""
         with connect(self.path) as db:
             return db.execute(
-                f"""SELECT i.*, eu.asset_code, eu.storage_location, et.name AS type_name
+                f"""SELECT i.*, eu.asset_code, eu.storage_location, et.name AS type_name, et.brand, et.model
                     FROM loan_items i JOIN equipment_units eu ON eu.id = i.equipment_unit_id
                     JOIN equipment_types et ON et.id = eu.equipment_type_id
                     WHERE i.loan_id = ? {extra} ORDER BY eu.asset_code""",

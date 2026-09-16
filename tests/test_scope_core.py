@@ -111,6 +111,7 @@ def test_loan_is_atomic_and_partial_return_updates_each_unit(service):
     first, second = equipment(service, actor.id, category)
     loan = service.create_loan(actor.id, user.id, [first, second], date(2026, 9, 14), date(2026, 9, 20))
     items = service.loan_items(loan["id"])
+    assert "brand" in items[0].keys() and "model" in items[0].keys()
     service.return_items(actor.id, loan["id"], [items[0]["id"]], datetime(2026, 9, 15, tzinfo=timezone.utc))
     assert [row["status"] for row in service.list_units()] == ["available", "borrowed"]
     assert service.list_loans(status="active")[0]["outstanding_count"] == 1

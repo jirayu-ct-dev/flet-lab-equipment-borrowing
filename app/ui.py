@@ -302,15 +302,22 @@ class AppUI:
         )
         pw = getattr(self.page, "width", None)
         form.width = min(440, max(280, int(pw - 32))) if (pw and pw < 472) else 440
-        return ft.Container(
-            ft.Column(
-                [form],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                scroll=ft.ScrollMode.AUTO,
+        if self.mobile:
+            return ft.Container(
+                ft.Column(
+                    [form],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    scroll=ft.ScrollMode.AUTO,
+                    expand=True,
+                ),
+                padding=16,
+                bgcolor=CANVAS,
                 expand=True,
-            ),
-            padding=16 if self.mobile else 24,
+            )
+        return ft.Container(
+            content=form,
+            alignment=ft.Alignment.CENTER,
+            padding=24,
             bgcolor=CANVAS,
             expand=True,
         )
@@ -458,15 +465,22 @@ class AppUI:
             return form_card
         pw = getattr(self.page, "width", None)
         form_card.width = min(480, max(280, int(pw - 32))) if (pw and pw < 512) else 480
-        return ft.Container(
-            ft.Column(
-                [form_card],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                scroll=ft.ScrollMode.AUTO,
+        if self.mobile:
+            return ft.Container(
+                ft.Column(
+                    [form_card],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    scroll=ft.ScrollMode.AUTO,
+                    expand=True,
+                ),
+                padding=16,
+                bgcolor=CANVAS,
                 expand=True,
-            ),
-            padding=16 if self.mobile else 24,
+            )
+        return ft.Container(
+            content=form_card,
+            alignment=ft.Alignment.CENTER,
+            padding=24,
             bgcolor=CANVAS,
             expand=True,
         )
@@ -909,7 +923,15 @@ class AppUI:
                 loan = self.service.create_loan(self.user.id, self.selected_borrower_id or 0, list(self.selected_unit_ids), start, due)  # type: ignore[union-attr]
                 self.close_dialog()
                 if loan["line_user_id"]:
-                    self.messenger.send(LineMessage(loan["line_user_id"], f"ยืมสำเร็จ: {loan['code']} จำนวน {loan['item_count']} ชิ้น กำหนดคืน {loan['due_date']}"))
+                    items = self.service.loan_items(loan["id"])
+                    item_lines = []
+                    for item in items:
+                        brand_model = " ".join(part for part in [item["brand"], item["model"]] if part and str(part).strip())
+                        equipment_name = f"{item['type_name']} {brand_model}".strip() if brand_model else item["type_name"]
+                        item_lines.append(f"• {equipment_name} ({item['asset_code']})")
+                    items_text = "\n".join(item_lines)
+                    message_text = f"ยืมสำเร็จ: {loan['code']}\nกำหนดคืน: {loan['due_date']}\nรายการที่ยืม ({loan['item_count']} ชิ้น):\n{items_text}"
+                    self.messenger.send(LineMessage(loan["line_user_id"], message_text))
                 self.selected_borrower_id = None
                 self.selected_unit_ids.clear()
                 self.loan_equipment_query = ""
