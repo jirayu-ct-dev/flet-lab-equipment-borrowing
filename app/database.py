@@ -8,331 +8,168 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from app.security import hash_password
 
-DEFAULT_DB_PATH = Path("data/lab_equipment.db")
-BANGKOK_TIMEZONE = ZoneInfo("Asia/Bangkok")
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "equipment_lending.db"
+BANGKOK = ZoneInfo("Asia/Bangkok")
+
+
+def database_path() -> Path:
+    configured = os.getenv("APP_DB_PATH", "").strip()
+    return Path(configured).expanduser().resolve() if configured else DEFAULT_DB_PATH
 
 
 def utc_now() -> datetime:
-    """Return an aware UTC timestamp for persisted event times."""
     return datetime.now(timezone.utc)
 
 
-def bangkok_today(now: datetime | None = None) -> date:
-    """Return the current Bangkok business date."""
-    instant = now or utc_now()
-    if instant.tzinfo is None:
-        raise ValueError("now must be timezone-aware")
-    return instant.astimezone(BANGKOK_TIMEZONE).date()
+def utc_text(value: datetime | None = None) -> str:
+    return (value or utc_now()).astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def bangkok_date(timestamp: str | datetime) -> date:
-    """Convert a persisted UTC timestamp to its Bangkok calendar date."""
-    instant = (
-        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        if isinstance(timestamp, str)
-        else timestamp
-    )
-    return bangkok_today(instant)
-
-
-def get_database_path() -> Path:
-    """Resolve the database path from APP_DB_PATH or the project default."""
-    configured_path = os.getenv("APP_DB_PATH")
-    return Path(configured_path) if configured_path else DEFAULT_DB_PATH
-
-
-def connect(database_path: str | Path | None = None) -> sqlite3.Connection:
-    """Open a configured SQLite connection with referential integrity enabled."""
-    path = Path(database_path) if database_path is not None else get_database_path()
-    if str(path) != ":memory:":
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-    connection = sqlite3.connect(path)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    return connection
+def bangkok_today(value: datetime | None = None) -> date:
+    return (value or utc_now()).astimezone(BANGKOK).date()
 
 
 @contextmanager
-def connection(database_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
-    """Yield a connection and always close it after use."""
-    database = connect(database_path)
+def connect(path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
+    target = Path(path) if path is not None else database_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(target)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA foreign_keys = ON")
+    db.execute("PRAGMA busy_timeout = 5000")
     try:
-        yield database
+        yield db
     finally:
-        database.close()
+        db.close()
 
 
-MIGRATIONS: tuple[str, ...] = (
-    """
-    CREATE TABLE locations (
-        id INTEGER PRIMARY KEY,
-        location_code TEXT NOT NULL UNIQUE,
-        building TEXT,
-        room TEXT NOT NULL,
-        cabinet TEXT,
-        shelf TEXT,
-        status TEXT NOT NULL DEFAULT 'active'
-            CHECK (status IN ('active', 'inactive'))
-    );
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS faculties (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive'))
+);
 
-    CREATE TABLE equipment (
-        id INTEGER PRIMARY KEY,
-        equipment_code TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        category TEXT,
-        manufacturer TEXT,
-        model TEXT,
-        default_location_id INTEGER REFERENCES locations(id),
-        purchase_price NUMERIC CHECK (purchase_price IS NULL OR purchase_price >= 0),
-        status TEXT NOT NULL DEFAULT 'active'
-            CHECK (status IN ('active', 'inactive')),
-        description TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
+CREATE TABLE IF NOT EXISTS departments (
+    id INTEGER PRIMARY KEY,
+    faculty_id INTEGER NOT NULL REFERENCES faculties(id),
+    name TEXT NOT NULL COLLATE NOCASE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    UNIQUE (faculty_id, name)
+);
 
-    CREATE TABLE equipment_units (
-        id INTEGER PRIMARY KEY,
-        asset_code TEXT NOT NULL UNIQUE,
-        equipment_id INTEGER NOT NULL REFERENCES equipment(id),
-        serial_number TEXT UNIQUE,
-        current_location_id INTEGER REFERENCES locations(id),
-        status TEXT NOT NULL DEFAULT 'available'
-            CHECK (status IN ('available', 'borrowed', 'maintenance', 'reported_lost', 'retired')),
-        acquired_at TEXT NOT NULL,
-        purchase_price NUMERIC CHECK (purchase_price IS NULL OR purchase_price >= 0),
-        note TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
+CREATE TABLE IF NOT EXISTS cohorts (
+    id INTEGER PRIMARY KEY,
+    department_id INTEGER NOT NULL REFERENCES departments(id),
+    name TEXT NOT NULL COLLATE NOCASE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    UNIQUE (department_id, name)
+);
 
-    CREATE TABLE staff (
-        id INTEGER PRIMARY KEY,
-        staff_code TEXT NOT NULL UNIQUE,
-        full_name TEXT NOT NULL,
-        email TEXT,
-        phone TEXT,
-        status TEXT NOT NULL DEFAULT 'active'
-            CHECK (status IN ('active', 'inactive')),
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
+CREATE TABLE IF NOT EXISTS class_groups (
+    id INTEGER PRIMARY KEY,
+    cohort_id INTEGER NOT NULL REFERENCES cohorts(id),
+    name TEXT NOT NULL COLLATE NOCASE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    UNIQUE (cohort_id, name)
+);
 
-    CREATE TABLE borrowers (
-        id INTEGER PRIMARY KEY,
-        borrower_code TEXT NOT NULL UNIQUE,
-        full_name TEXT NOT NULL,
-        department TEXT,
-        email TEXT,
-        phone TEXT,
-        note TEXT,
-        status TEXT NOT NULL DEFAULT 'active'
-            CHECK (status IN ('active', 'inactive')),
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
+CREATE TABLE IF NOT EXISTS equipment_categories (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive'))
+);
 
-    CREATE TABLE borrow_transactions (
-        id INTEGER PRIMARY KEY,
-        transaction_code TEXT NOT NULL UNIQUE,
-        borrower_id INTEGER NOT NULL REFERENCES borrowers(id),
-        borrow_date TEXT NOT NULL,
-        due_date TEXT NOT NULL,
-        purpose TEXT,
-        recorded_by_staff_id INTEGER NOT NULL REFERENCES staff(id),
-        status TEXT NOT NULL DEFAULT 'draft'
-            CHECK (status IN ('draft', 'active', 'completed', 'cancelled')),
-        note TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        CHECK (due_date >= borrow_date)
-    );
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    password_hash TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    backup_email TEXT,
+    role TEXT NOT NULL DEFAULT 'borrower' CHECK (role IN ('admin', 'borrower')),
+    user_type TEXT NOT NULL CHECK (user_type IN ('student', 'teacher', 'staff')),
+    faculty_id INTEGER REFERENCES faculties(id),
+    department_id INTEGER REFERENCES departments(id),
+    cohort_id INTEGER REFERENCES cohorts(id),
+    class_group_id INTEGER REFERENCES class_groups(id),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    must_change_password INTEGER NOT NULL DEFAULT 1,
+    line_user_id TEXT UNIQUE,
+    last_login_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
 
-    CREATE TABLE borrow_items (
-        id INTEGER PRIMARY KEY,
-        transaction_id INTEGER NOT NULL REFERENCES borrow_transactions(id),
-        equipment_unit_id INTEGER NOT NULL REFERENCES equipment_units(id),
-        UNIQUE (transaction_id, equipment_unit_id)
-    );
+CREATE TABLE IF NOT EXISTS equipment_types (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE,
+    category_id INTEGER NOT NULL REFERENCES equipment_categories(id),
+    brand TEXT,
+    model TEXT,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE (category_id, name, brand, model)
+);
 
-    CREATE TABLE returns (
-        id INTEGER PRIMARY KEY,
-        transaction_id INTEGER NOT NULL REFERENCES borrow_transactions(id),
-        returned_at TEXT NOT NULL,
-        received_by_staff_id INTEGER NOT NULL REFERENCES staff(id),
-        note TEXT
-    );
+CREATE TABLE IF NOT EXISTS equipment_units (
+    id INTEGER PRIMARY KEY,
+    equipment_type_id INTEGER NOT NULL REFERENCES equipment_types(id),
+    asset_code TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    storage_location TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'borrowed', 'inactive')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
 
-    CREATE TABLE return_items (
-        id INTEGER PRIMARY KEY,
-        return_id INTEGER NOT NULL REFERENCES returns(id),
-        borrow_item_id INTEGER NOT NULL UNIQUE REFERENCES borrow_items(id),
-        outcome TEXT NOT NULL
-            CHECK (outcome IN ('available', 'maintenance', 'reported_lost')),
-        condition_note TEXT
-    );
+CREATE TABLE IF NOT EXISTS loans (
+    id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    borrower_id INTEGER NOT NULL REFERENCES users(id),
+    borrow_date TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    created_by_user_id INTEGER NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed')),
+    reminder_3d_at TEXT,
+    reminder_1d_at TEXT,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK (due_date >= borrow_date)
+);
 
-    CREATE TABLE lost_cases (
-        id INTEGER PRIMARY KEY,
-        equipment_unit_id INTEGER NOT NULL REFERENCES equipment_units(id),
-        borrow_item_id INTEGER NOT NULL UNIQUE REFERENCES borrow_items(id),
-        reported_at TEXT NOT NULL,
-        assessed_value NUMERIC CHECK (assessed_value IS NULL OR assessed_value >= 0),
-        approved_compensation NUMERIC
-            CHECK (approved_compensation IS NULL OR approved_compensation >= 0),
-        resolution TEXT
-            CHECK (resolution IS NULL OR resolution IN ('recovered', 'replaced', 'compensated', 'waived')),
-        approved_by_staff_id INTEGER REFERENCES staff(id),
-        resolved_at TEXT,
-        note TEXT
-    );
+CREATE TABLE IF NOT EXISTS loan_items (
+    id INTEGER PRIMARY KEY,
+    loan_id INTEGER NOT NULL REFERENCES loans(id),
+    equipment_unit_id INTEGER NOT NULL REFERENCES equipment_units(id),
+    returned_at TEXT,
+    received_by_user_id INTEGER REFERENCES users(id),
+    UNIQUE (loan_id, equipment_unit_id)
+);
 
-    CREATE TABLE inventory_adjustments (
-        id INTEGER PRIMARY KEY,
-        equipment_unit_id INTEGER NOT NULL REFERENCES equipment_units(id),
-        action TEXT NOT NULL
-            CHECK (action IN ('acquire', 'retire', 'relocate', 'repair_complete')),
-        reason TEXT NOT NULL,
-        staff_id INTEGER NOT NULL REFERENCES staff(id),
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-
-    CREATE TABLE audit_logs (
-        id INTEGER PRIMARY KEY,
-        entity_type TEXT NOT NULL,
-        entity_id INTEGER NOT NULL,
-        action TEXT NOT NULL,
-        before_json TEXT,
-        after_json TEXT,
-        reason TEXT NOT NULL,
-        staff_id INTEGER NOT NULL REFERENCES staff(id),
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-    """,
-    """
-    ALTER TABLE return_items
-    ADD COLUMN location_id INTEGER REFERENCES locations(id);
-    """,
-    """
-    ALTER TABLE lost_cases
-    ADD COLUMN replacement_unit_id INTEGER REFERENCES equipment_units(id);
-    """,
-    """
-    CREATE TRIGGER audit_logs_no_update
-    BEFORE UPDATE ON audit_logs
-    BEGIN
-        SELECT RAISE(ABORT, 'audit logs are append-only');
-    END;
-
-    CREATE TRIGGER audit_logs_no_delete
-    BEFORE DELETE ON audit_logs
-    BEGIN
-        SELECT RAISE(ABORT, 'audit logs are append-only');
-    END;
-    """,
-    """
-    CREATE TABLE equipment_categories (
-        id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL COLLATE NOCASE UNIQUE,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-
-    INSERT OR IGNORE INTO equipment_categories(name)
-    SELECT DISTINCT TRIM(category)
-    FROM equipment
-    WHERE category IS NOT NULL AND TRIM(category) <> '';
-
-    ALTER TABLE equipment
-    ADD COLUMN category_id INTEGER REFERENCES equipment_categories(id);
-
-    UPDATE equipment
-    SET category_id = (
-        SELECT id
-        FROM equipment_categories
-        WHERE name = equipment.category COLLATE NOCASE
-    )
-    WHERE category IS NOT NULL AND TRIM(category) <> '';
-    """,
-    """
-    CREATE TABLE app_seed_runs (
-        seed_key TEXT PRIMARY KEY,
-        applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-    """,
-    """
-    CREATE TABLE app_users (
-        id INTEGER PRIMARY KEY,
-        role TEXT NOT NULL CHECK (role IN ('admin','user')),
-        email TEXT UNIQUE,
-        password_hash TEXT,
-        line_sub TEXT UNIQUE,
-        display_name TEXT NOT NULL,
-        staff_id INTEGER UNIQUE REFERENCES staff(id),
-        borrower_id INTEGER UNIQUE REFERENCES borrowers(id),
-        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
-        must_change_password INTEGER NOT NULL DEFAULT 0,
-        last_login_at TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-        CHECK ((email IS NOT NULL) OR (line_sub IS NOT NULL))
-    );
-
-    CREATE TABLE app_sessions (
-        token TEXT PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES app_users(id),
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-        expires_at TEXT NOT NULL
-    );
-
-    CREATE INDEX idx_app_sessions_user ON app_sessions(user_id);
-    """,
-    """
-    CREATE TABLE lost_reports (
-        id INTEGER PRIMARY KEY,
-        borrower_id INTEGER NOT NULL REFERENCES borrowers(id),
-        equipment_unit_id INTEGER NOT NULL REFERENCES equipment_units(id),
-        reported_at TEXT NOT NULL,
-        lost_date TEXT,
-        location TEXT,
-        description TEXT,
-        status TEXT NOT NULL DEFAULT 'pending'
-            CHECK (status IN ('pending', 'approved', 'rejected')),
-        reviewed_by_staff_id INTEGER REFERENCES staff(id),
-        reviewed_at TEXT,
-        review_note TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-    );
-    """,
-)
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_units_status ON equipment_units(status);
+CREATE INDEX IF NOT EXISTS idx_loans_borrower_status ON loans(borrower_id, status);
+CREATE INDEX IF NOT EXISTS idx_loan_items_loan ON loan_items(loan_id);
+"""
 
 
-def initialize_database(database_path: str | Path | None = None) -> None:
-    """Apply each pending schema migration exactly once."""
-    with connection(database_path) as database:
-        database.execute(
+def initialize_database(path: str | Path | None = None) -> Path:
+    target = Path(path) if path is not None else database_path()
+    with connect(target) as db:
+        db.executescript(SCHEMA)
+        db.execute(
             """
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version INTEGER PRIMARY KEY,
-                applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-            )
-            """
+            INSERT OR IGNORE INTO users(
+                username, password_hash, full_name, role, user_type,
+                status, must_change_password
+            ) VALUES ('admin', ?, 'ผู้ดูแลระบบ', 'admin', 'staff', 'active', 1)
+            """,
+            (hash_password("admin1234"),),
         )
-        applied_versions = {
-            row["version"]
-            for row in database.execute("SELECT version FROM schema_migrations")
-        }
-
-        for version, migration in enumerate(MIGRATIONS, start=1):
-            if version in applied_versions:
-                continue
-            try:
-                database.executescript("BEGIN IMMEDIATE;\n" + migration)
-                database.execute(
-                    "INSERT INTO schema_migrations(version) VALUES (?)", (version,)
-                )
-                database.commit()
-            except Exception:
-                database.rollback()
-                raise
+        db.commit()
+    return target

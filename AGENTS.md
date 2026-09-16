@@ -1,177 +1,46 @@
 # AGENTS.md
 
-## Project: flet-lab-equipment-borrowing
+## Project
 
-Flet (Python) web app for a lab-equipment borrowing system. SQLite backend for a
-small team, with email/password and LINE Login. **All UI copy is Thai** (labels,
-hints, toasts); domain code and status strings are English.
+Flet Web + SQLite MVP สำหรับยืม–คืนอุปกรณ์ของสาขาวิทยาการคอมพิวเตอร์ เอกสารหลักคือ `docs/project_scope.md`; เมื่อเอกสารเก่าหรือสมมติฐานอื่นขัดกัน ให้ยึด scope นี้
 
-### Commands
+UI copy เป็นภาษาไทย ส่วนชื่อในโค้ดและสถานะในฐานข้อมูลเป็นภาษาอังกฤษ
+
+## Commands
 
 ```bash
-python -m pip install -r requirements-dev.txt   # deps: flet + pytest only (no lint/format config in repo)
-flet run --web --port 8550 main.py              # dev server; entrypoint is repo-root main.py
-python -m pytest                                # full suite; no pytest config, no conftest
-docker compose up --build -d                    # → http://localhost:8080
+python -m pip install -r requirements-dev.txt
+flet run --web --port 8550 main.py
+python -m pytest
+python -m compileall -q main.py app
 ```
 
-- Demo data: set `APP_SEED_DEMO=1` (Docker sets it by default). Seeding is idempotent
-  via the `app_seed_runs` table (`app/seed.py`); delete `data/lab_equipment.db` to reseed.
-- DB location: `APP_DB_PATH` env var; default is the relative `data/lab_equipment.db`.
-  Under `flet run`, the process CWD is `.flet/storage/data` (see `.flet/README.md`), so
-  the relative default lands elsewhere — set `APP_DB_PATH` for a predictable location.
+## Architecture
 
-### Architecture & wiring
+- `main.py` โหลด `.env` และเริ่ม `AppUI`
+- `app/ui.py` เป็น Flet shell และหน้าจอทั้งหมดของ Admin/ผู้ยืม
+- `app/service.py` เป็น boundary เดียวของกฎธุรกิจและคำสั่ง SQLite ไม่มี repository abstraction หรือ fake service
+- `app/database.py` เป็น schema และการเปิด connection; default DB คือ `data/equipment_lending.db` แบบยึด project root
+- `app/import_users.py` อ่าน/ตรวจ/นำเข้า CSV และ XLSX
+- `app/line.py` มี LINE OAuth provider และ text push client แบบ best effort
+- `app/security.py` เก็บ PBKDF2 password hashing
 
-- `main.py` builds the app shell and swaps `content_area.content` per nav tab; views in
-  `app/views/`.
-- The running shell uses `app/views/rebuild.py`: `WorkspaceView` is the queue-first
-  home page, `QuickBorrowView` is the one-page multi-unit checkout flow, and
-  `QuickReturnView` is the return queue with outstanding items preselected. Keep
-  actions focused on the two verbs staff use most: ยืม and รับคืน. The older view
-  modules remain compatibility boundaries for tests and integrations; do not wire
-  them back into the shell without a deliberate UX reason.
-- Views consume one duck-typed service facade: `FakeInventoryService` (in-memory,
-  `app/services/fake_services.py`) or `SQLiteInventoryAdapter` (persistent,
-  `app/services/sqlite_adapter.py`), chosen by `create_app_services()`
-  (`app/services/container.py`). **Keep the fake and SQLite implementations in sync** —
-  changing one's API almost always means updating the other plus its tests.
-- Domain layer: `app/contracts.py` (dataclasses + runtime-checkable Protocols),
-  `app/repositories/` (raw SQL), `app/services/*.py` (domain logic), `app/errors.py`
-  (`DomainError` hierarchy the UI maps to user feedback).
-- Migrations are the `MIGRATIONS` tuple in `app/database.py`; `initialize_database()`
-  applies pending versions (tracked in `schema_migrations`). To add a migration, append
-  to the tuple — existing DBs must upgrade in place. `audit_logs` is append-only (triggers).
-- Times are persisted as UTC ISO strings ending in `Z`; calendar dates derive from
-  `Asia/Bangkok` via `bangkok_today()`/`bangkok_date()`. Never compare business dates
-  against raw timestamps.
-- Flet 0.86 layout gotcha: **never assign `expand = False`** — it corrupts the whole
-  enclosing `Row`/`ResponsiveRow` (renders as two full-height panels). Use
-  `expand = None` to un-flex. Guarded by `tests/test_layout_guards.py`; debugging
-  playbook in `.agents/skills/flet-layout-debug/SKILL.md`.
+## Domain rules
 
-### Authentication & authorization
+- มี role แค่ `admin` และ `borrower`; user type คือ `student`, `teacher`, `staff`
+- username ไม่ซ้ำแบบ case-insensitive และเป็นรหัสผ่านเริ่มต้นของผู้ใช้ใหม่
+- DB ใหม่สร้าง `admin` / `admin1234` ครั้งเดียวและบังคับเปลี่ยนรหัส
+- การสร้าง loan และเปลี่ยน unit เป็น `borrowed` ต้องอยู่ transaction เดียวกัน
+- การคืนบันทึกที่ `loan_items.returned_at`; partial return ได้ และ loan ปิดเมื่อครบทุกชิ้น
+- ผู้ยืม inactive หรือมีรายการเกินกำหนดยืมเพิ่มไม่ได้
+- ใช้ `Asia/Bangkok` สำหรับ business date และ UTC `Z` สำหรับ timestamp
+- LINE ส่งแบบ best effort ห้ามทำให้ loan/return rollback
+- ข้อมูลที่มีประวัติใช้ inactive แทน delete
 
-- Roles: `admin` (staff, full access) / `user` (borrower self-service: อุปกรณ์, ของฉัน,
-  ประวัติ). A `user` account linked to `staff_id` is treated as an operational staff
-  account for dashboard, inventory viewing, history, and loan/return operations.
-  `Role`, `Permission`, `ROLE_PERMISSIONS`, `has_permission()` live in
-  `app/contracts.py`; permissions are enforced both by nav/route gating in
-  `main.py` and by guards at mutation handlers.
-- Identity: `app_users` (email + password_hash via `app/security.py` pbkdf2, and/or
-  LINE via `line_sub`) linking to `staff_id` or `borrower_id`. `AuthService` protocol
-  implemented by `FakeAuthService` and `SQLiteAuthAdapter` — keep them in sync like
-  the inventory facades.
-- Session: `page.session["user_id"]`; `main()` shows LoginView or the shell;
-  `must_change_password` routes to ChangePasswordView. LINE login uses flet's
-  `page.login(OAuthProvider)` (`app/services/line_login.py`), enabled by env vars
-  `LINE_CLIENT_ID` / `LINE_CLIENT_SECRET` / `LINE_REDIRECT_URL` — never commit secrets.
-- A first-time LINE login receives a generated borrower profile in SQLite so the
-  account is not left as an unusable orphan. Staff can edit or link that profile
-  later from คนในระบบ. LINE push notifications use
-  `LINE_MESSAGING_CHANNEL_ACCESS_TOKEN` and are always best-effort.
-- Demo accounts (seeded): `admin@lab.local`/`admin123` (must change on first login),
-  `borrower@lab.local`/`borrow123`. Test fixtures: `tests/test_auth_fixtures.py`.
+## Tests
 
-### Testing
+ใช้ SQLite file ใน `tmp_path` เท่านั้น ห้ามแตะฐานข้อมูลจริง ทดสอบกฎที่ public service seam และ mock เฉพาะ network/time boundary เมื่อจำเป็น
 
-- `tests/` = view + fake-service unit tests (build flet controls, assert structure; no
-  server needed). `tests/integration/` = SQLite/migration/seed/service tests using
-  `tmp_path` DBs — never touch the real `data/`.
-- `tests/integration/test_seed.py` asserts exact demo row counts (58 units, 5 loans, ...);
-  update it when seed data changes.
-- Status strings are English in the domain (`available`, `borrowed`, ...); Thai display
-  labels live in `STATUS_THEMES` in `app/theme.py`.
+## UI
 
----
-
-General operating principles for coding agents. Apply them across projects, then adapt to this repository's instructions, conventions, and tooling.
-
-**Balance:** Favor correctness and restraint without turning low-risk work into ceremony. For small, reversible tasks, inspect briefly and proceed. For ambiguous, high-impact, or destructive work, slow down and confirm the important assumptions.
-
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-## Scope and authority
-
-**The request defines the goal; it does not authorize unrelated work.**
-
-- For explanation, review, or diagnosis, inspect and report. Do not modify unless asked.
-- For implementation or fixes, make the necessary in-scope changes and verify them.
-- Ask before material destructive operations that were not explicitly requested, adding major dependencies, changing public contracts, or expanding scope materially.
-- Follow explicit repository requirements and the most specific applicable project instructions; surface conflicts instead of silently choosing.
-
-## 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- Read relevant code, nearby documentation, and applicable `AGENTS.md` files.
-- Identify the requested outcome, current behavior, and constraints; check project conventions and available commands instead of guessing.
-- Consider whether a smaller solution already exists in the repository.
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## Adapt to the project
-
-- Use repository documentation and package scripts to discover build, test, lint, and formatting commands.
-- Put language-, framework-, or domain-specific workflows in the relevant local instructions or skills, not in this general guidance.
-- Prefer formatters, linters, type checkers, tests, and CI for rules that can be checked mechanically.
-- Do not replace an established project pattern merely because another pattern is generally preferred.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-During implementation, reproduce bugs before fixing them when practical, add or update tests when behavior changes and the project has a suitable test structure, run the narrowest relevant checks first, and review the final diff for accidental scope expansion.
-
-At handoff, state what changed, what was verified, and any remaining uncertainty. Never claim a check passed if it was not run.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+เน้น search-first, ปุ่มงานหลักชัด, confirmation ก่อน mutation สำคัญ และสถานะต้องมีข้อความร่วมกับสี ห้ามกำหนด `expand=False` ใน Flet 0.86; ใช้ `None` เมื่อไม่ต้องการ flex และอย่าใช้ flex child ภายใน `Row(wrap=True)`

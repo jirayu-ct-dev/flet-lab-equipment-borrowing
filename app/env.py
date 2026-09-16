@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 def load_env_file(path: str | Path | None = None) -> Path | None:
     """Load KEY=VALUE pairs from a .env file into os.environ.
 
-    Existing environment variables are never overridden (shell/Docker wins).
+    Existing environment variables are never overridden (shell wins).
     Returns the resolved path if the file was loaded, else None.
     """
     file = Path(path) if path is not None else PROJECT_ROOT / ".env"
