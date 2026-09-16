@@ -6,6 +6,7 @@ __pycache__
 *.py[cod]
 *.db
 data/
-docs/
+docs/*
+!docs/cs66.md
 skills/
 tests/
