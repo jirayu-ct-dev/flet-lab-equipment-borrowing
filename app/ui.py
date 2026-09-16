@@ -171,6 +171,10 @@ class AppUI:
         self.messenger = LineMessenger()
         self.root = ft.Container(expand=True)
         self.user: User | None = None
+        # Set only during the first successful LINE-link flow.  It lets the
+        # user choose a new password without typing the just-verified initial
+        # password a second time.  It is never persisted.
+        self._line_verified_initial_password: str | None = None
         self.route = "dashboard"
         self.query = ""
         self.master_kind = "faculty"
@@ -328,6 +332,7 @@ class AppUI:
 
     def logout(self) -> None:
         self.user = None
+        self._line_verified_initial_password = None
         self.page.session.store.remove("user_id")
         self.render()
         self.page.run_task(self._clear_persistent_login)
@@ -360,10 +365,13 @@ class AppUI:
 
         def link(_):
             try:
-                user = self.service.link_line(username.value or "", password.value or "", line_user_id)
+                verified_password = password.value or ""
+                user = self.service.link_line(username.value or "", verified_password, line_user_id)
                 self.close_dialog()
+                if user.must_change_password:
+                    self._line_verified_initial_password = verified_password
                 self.login(user)
-                self.feedback("เชื่อมบัญชี LINE แล้ว")
+                self.feedback("เชื่อมบัญชี LINE แล้ว กรุณาตั้งรหัสผ่านใหม่")
             except AppError as error:
                 self.feedback(str(error), error=True)
 
@@ -379,6 +387,7 @@ class AppUI:
         new = ft.TextField(label="รหัสผ่านใหม่ อย่างน้อย 8 ตัว", password=True, can_reveal_password=True)
         confirm = ft.TextField(label="ยืนยันรหัสผ่านใหม่", password=True, can_reveal_password=True)
         message = ft.Text("", color=DANGER)
+        verified_initial_password = self._line_verified_initial_password if forced else None
 
         def save(_):
             if new.value != confirm.value:
@@ -386,7 +395,12 @@ class AppUI:
                 message.update()
                 return
             try:
-                self.user = self.service.change_password(self.user.id, current.value or "", new.value or "")  # type: ignore[union-attr]
+                self.user = self.service.change_password(  # type: ignore[union-attr]
+                    self.user.id,
+                    verified_initial_password if verified_initial_password is not None else current.value or "",
+                    new.value or "",
+                )
+                self._line_verified_initial_password = None
                 self.page.run_task(self._persist_login, self.user.id)
                 self.feedback("เปลี่ยนรหัสผ่านแล้ว")
                 self.render()
@@ -398,8 +412,15 @@ class AppUI:
             ft.Column(
                 [
                     ft.Text("ตั้งรหัสผ่านใหม่" if forced else "เปลี่ยนรหัสผ่าน", size=24, weight=ft.FontWeight.BOLD),
-                    ft.Text("ต้องเปลี่ยนรหัสผ่านก่อนใช้งานครั้งแรก" if forced else "ใช้รหัสผ่านที่จำง่ายสำหรับคุณและเดายากสำหรับผู้อื่น", color=MUTED),
-                    current,
+                    ft.Text(
+                        "ยืนยันบัญชีผ่าน LINE แล้ว กรุณาตั้งรหัสผ่านใหม่ก่อนเริ่มใช้งาน"
+                        if verified_initial_password is not None
+                        else "ต้องเปลี่ยนรหัสผ่านก่อนใช้งานครั้งแรก"
+                        if forced
+                        else "ใช้รหัสผ่านที่จำง่ายสำหรับคุณและเดายากสำหรับผู้อื่น",
+                        color=MUTED,
+                    ),
+                    *([] if verified_initial_password is not None else [current]),
                     new,
                     confirm,
                     message,
