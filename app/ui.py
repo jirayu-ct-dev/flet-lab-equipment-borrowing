@@ -703,7 +703,7 @@ class AppUI:
 
         unit_search = ft.TextField(
             value=self.loan_equipment_query,
-            hint_text="ค้นหา asset code ชื่ออุปกรณ์ หรือตำแหน่ง",
+            hint_text="ค้นหา asset code ชื่อ ยี่ห้อ รุ่น หรือตำแหน่ง",
             prefix_icon=ft.Icons.SEARCH,
             expand=True,
             height=48,
@@ -748,14 +748,19 @@ class AppUI:
                 self.close_dialog()
                 self.feedback(str(error), error=True)
 
-        unit_rows = [
-            ft.Checkbox(
-                label=f"{row['asset_code']} · {row['type_name']} · {row['storage_location']}",
-                value=row["id"] in self.selected_unit_ids,
-                on_change=lambda event, unit_id=row["id"]: toggle_unit(unit_id, bool(event.control.value)),
+        unit_rows = []
+        for row in available_units:
+            brand_model = " · ".join(part for part in (row["brand"], row["model"]) if part) or "ไม่ระบุยี่ห้อ/รุ่น"
+            unit_rows.append(
+                ft.Container(
+                    ft.Checkbox(
+                        label=f"{row['type_name']} — {brand_model}\n{row['asset_code']} · {row['storage_location']}",
+                        value=row["id"] in self.selected_unit_ids,
+                        on_change=lambda event, unit_id=row["id"]: toggle_unit(unit_id, bool(event.control.value)),
+                    ),
+                    padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+                )
             )
-            for row in available_units
-        ]
         create_panel = card(
             ft.Column(
                 [

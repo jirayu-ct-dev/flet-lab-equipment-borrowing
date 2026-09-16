@@ -175,6 +175,16 @@ def test_inactive_equipment_type_is_not_offered_as_available(service):
     assert service.list_units(status="available") == []
 
 
+def test_unit_search_includes_brand_and_model(service):
+    actor = admin(service)
+    _, _, _, _, category = master_data(service, actor.id)
+    equipment_type = service.save_equipment_type(actor.id, name="การ์ดจอ", category_id=category, brand="NVIDIA", model="RTX 5090")
+    service.save_unit(actor.id, equipment_type_id=equipment_type, asset_code="GPU-001", storage_location="ห้องแล็บ")
+
+    assert [row["asset_code"] for row in service.list_units("NVIDIA", "available")] == ["GPU-001"]
+    assert [row["asset_code"] for row in service.list_units("5090", "available")] == ["GPU-001"]
+
+
 def test_returned_today_uses_bangkok_calendar_date(service, monkeypatch):
     actor = admin(service)
     faculty, department, cohort, group, category = master_data(service, actor.id)

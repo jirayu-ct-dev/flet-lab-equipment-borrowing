@@ -40,7 +40,7 @@ def test_import_accepts_faculty_name_with_or_without_prefix(tmp_path):
     service, _ = prepared(tmp_path)
     data = (
         "username,full_name,backup_email,role,user_type,faculty,department,cohort,class_group\n"
-        "66011230001,นายกฤษฎา,,borrower,student,คณะวิทยาศาสตร์,วิทยาการคอมพิวเตอร์,65,1\n"
+        "660112230001,นายกฤษฎา,,borrower,student,คณะวิทยาศาสตร์,วิทยาการคอมพิวเตอร์,65,1\n"
     ).encode("utf-8")
 
     preview = preview_users(service, "users.csv", data)

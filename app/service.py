@@ -558,8 +558,8 @@ class AppService:
         values: list[object] = []
         if query.strip():
             term = f"%{query.strip()}%"
-            where.append("(u.asset_code LIKE ? OR t.name LIKE ? OR u.storage_location LIKE ?)")
-            values.extend((term, term, term))
+            where.append("(u.asset_code LIKE ? OR t.name LIKE ? OR t.brand LIKE ? OR t.model LIKE ? OR u.storage_location LIKE ?)")
+            values.extend((term, term, term, term, term))
         if status in {"available", "borrowed", "inactive"}:
             where.append("u.status = ?")
             values.append(status)
